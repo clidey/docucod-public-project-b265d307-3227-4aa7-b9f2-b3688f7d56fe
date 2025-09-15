@@ -1,0 +1,277 @@
+---
+title: "Enable Tracing and Metrics Collection"
+description: "Step-by-step instructions for enabling both tracing and database metrics. Discover how to hook into GORM's operations to gain visibility into query performance, state, and distributed traces, ensuring you're set up for efficient debugging and monitoring."
+---
+
+# Enable Tracing and Metrics Collection
+
+Unlock deep visibility into your GORM database interactions by enabling tracing and database metrics collection. This guide walks you through activating OpenTelemetry's tracing and metrics features for GORM, empowering you to monitor query performance, track distributed traces, and collect runtime metrics efficiently.
+
+---
+
+## Workflow Overview
+
+### What This Guide Achieves
+You will enable full OpenTelemetry instrumentation on your GORM setup, including both tracing of database operations and collection of key metrics related to query performance and database state. This ensures you have actionable telemetry data for debugging and monitoring.
+
+### Prerequisites
+- A Go project using GORM as your ORM.
+- Basic familiarity with Go modules and context.
+- Access to an OpenTelemetry-compatible backend (e.g., Jaeger for tracing, Prometheus for metrics) recommended for full observability.
+- `gorm.io/plugin/opentelemetry` plugin installed.
+
+### Expected Outcome
+- Tracing spans created automatically around GORM CRUD and raw query operations.
+- Metrics collected about database usage and exported via OpenTelemetry.
+- Ability to visualize distributed traces and metrics on your telemetry backend.
+
+### Time Estimate
+About 15-30 minutes to set up tracing and metrics in an existing GORM-based application.
+
+### Difficulty Level
+Intermediate: Requires Go coding, familiarity with GORM middleware/plugins, and basic OpenTelemetry concepts.
+
+---
+
+## Step-by-Step Instructions
+
+### Step 1: Set Up Your Go Project With Required Imports
+Ensure your main Go file imports the OpenTelemetry tracing plugin alongside GORM and a logger supporting structured output like Logrus.
+
+```go
+import (
+	"context"
+	"time"
+
+	"go.opentelemetry.io/otel"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
+
+	"gorm.io/plugin/opentelemetry/tracing"
+	"gorm.io/plugin/opentelemetry/logging/logrus"
+)
+```
+
+
+### Step 2: Configure a Structured Logger for GORM
+Replace GORM's default logger with Logrus for enriched, structured logging that includes trace context.
+
+```go
+l := logger.New(
+	logrus.NewWriter(),
+	logger.Config{
+		SlowThreshold: time.Millisecond, // Detect slow queries
+		LogLevel:      logger.Info,    // Log info and above
+		Colorful:      false,
+	},
+)
+```
+
+
+### Step 3: Open Your Database Connection With Logger Configured
+Open GORM database connection as usual but pass the customized logger instance.
+
+```go
+db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{Logger: l})
+if err != nil {
+	panic(err)
+}
+```
+
+
+### Step 4: Enable Tracing and Metrics Using the OpenTelemetry Plugin
+Attach the OpenTelemetry tracing plugin to your database. By default, this enables both tracing and metrics collection.
+
+```go
+if err := db.Use(tracing.NewPlugin()); err != nil {
+	panic(err)
+}
+```
+
+
+#### Option: Disable Metrics Collection If Desired
+To collect only tracing without metrics:
+
+```go
+if err := db.Use(tracing.NewPlugin(tracing.WithoutMetrics())); err != nil {
+	panic(err)
+}
+```
+
+
+### Step 5: Initialize OpenTelemetry Provider (Optional but Recommended)
+Set up OpenTelemetry providers for trace and metrics export. You may configure exporters like Jaeger for tracing and Prometheus for metrics.
+
+Example using the default OTLP provider:
+
+```go
+import "context"
+
+ctx := context.Background()
+provider := provider.NewOpenTelemetryProvider(
+	provider.WithExportEndpoint("localhost:4317"),
+	provider.WithEnableTracing(true),
+	provider.WithEnableMetrics(true),
+)
+defer provider.Shutdown(ctx)
+```
+
+*This step is often handled within your application's observability setup or the telemetry backend integration.*
+
+
+### Step 6: Wrap Your Database Calls Within OpenTelemetry Spans
+Use OpenTelemetry's tracer to start top-level spans in your code context. The plugin will create child spans for GORM operations.
+
+```go
+tracer := otel.Tracer("gorm.io/plugin/opentelemetry")
+ctx, span := tracer.Start(context.Background(), "root-operation")
+defer span.End()
+
+var result int
+if err := db.WithContext(ctx).Raw("SELECT 42").Scan(&result).Error; err != nil {
+	panic(err)
+}
+```
+
+
+### Step 7: Run Your Application and View Telemetry
+- Launch your application normally.
+- If configured with Jaeger, access the UI (usually at http://localhost:16686) to view traces.
+- If using Prometheus for metrics, navigate to your configured metrics endpoint (e.g., http://localhost:8088/metrics).
+
+
+---
+
+## Examples & Practical Code
+
+### Complete Minimal Setup Example
+
+```go
+package main
+
+import (
+	"context"
+	"time"
+
+	"go.opentelemetry.io/otel"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
+
+	"gorm.io/plugin/opentelemetry/logging/logrus"
+	"gorm.io/plugin/opentelemetry/tracing"
+)
+
+func main() {
+	ctx := context.Background()
+
+	// Configure logger
+	logrusLogger := logger.New(
+		logrus.NewWriter(),
+		logger.Config{
+			SlowThreshold: time.Millisecond,
+			LogLevel:      logger.Info,
+			Colorful:      false,
+		},
+	)
+
+	// Open DB
+	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{Logger: logrusLogger})
+	if err != nil {
+		panic(err)
+	}
+
+	// Use OpenTelemetry tracing with metrics enabled
+	if err := db.Use(tracing.NewPlugin()); err != nil {
+		panic(err)
+	}
+
+	// Start a root span
+	tracer := otel.Tracer("example-tracer")
+	ctx, span := tracer.Start(ctx, "root-span")
+	defer span.End()
+
+	// Run a query with tracing
+	var number int
+	if err := db.WithContext(ctx).Raw("SELECT 42").Scan(&number).Error; err != nil {
+		panic(err)
+	}
+}
+```
+
+
+### Advanced Usage Tip
+You can customize the OpenTelemetry provider with options such as custom service names, namespaces, or export endpoints through the `provider.NewOpenTelemetryProvider()` function, as shown in the provider package.
+
+
+---
+
+## Troubleshooting & Tips
+
+<AccordionGroup title="Common Issues When Enabling Tracing and Metrics">
+<Accordion title="No Traces Appear in Jaeger">
+- Verify your `OTEL_EXPORTER_JAEGER_ENDPOINT` environment variable is correctly set.
+- Confirm that Jaeger service is running and accessible.
+- Check application logs for exporter initialization errors.
+</Accordion>
+<Accordion title="Metrics Endpoint Shows No Data">
+- Ensure metrics exporter, such as Prometheus, is properly set up and scraping your metrics endpoint.
+- Confirm the periodic runtime metrics collector is started without errors.
+- Verify no firewall blocks on the metrics HTTP port.
+</Accordion>
+<Accordion title="Slow Queries Not Logged or Traced">
+- Check that GORM logger’s `SlowThreshold` is set appropriately (e.g., `time.Millisecond`).
+- Ensure tracing plugin is active without `WithoutMetrics` if metrics on DB performance are needed.
+</Accordion>
+</AccordionGroup>
+
+<Tip>
+Always pass a context containing the OpenTelemetry span when executing GORM queries to ensure spans are linked correctly.
+</Tip>
+
+<Note>
+Disabling metrics with `tracing.WithoutMetrics()` will stop metrics collection but preserve tracing functionality, useful for performance-sensitive environments.
+</Note>
+
+---
+
+## Next Steps & Related Content
+
+- Explore the **[Set Up the Default OpenTelemetry Provider](/guides/essential-workflows/provider-setup)** guide to configure exporters for your telemetry data.
+- Learn how to **[Instrument GORM Logging with Logrus](/guides/essential-workflows/setup-logging)** to correlate logs with traces and metrics.
+- Dive into **[Integrate with Prometheus Monitoring](/guides/real-world-examples/prometheus-integration)** for detailed metrics scraping and visualization.
+- Review **[Validating Your Setup](/getting-started/validation-and-troubleshooting/validation-steps)** to confirm telemetry data is correctly collected and exported.
+
+---
+
+## Diagram: Workflow for Enabling Tracing and Metrics
+
+```mermaid
+flowchart TD
+
+  A[Start Application] --> B[Configure Logger with Logrus]
+  B --> C[Open GORM DB with Logger]
+  C --> D[Use OpenTelemetry Tracing Plugin on DB]
+  D --> E[Set Up OpenTelemetry Provider (Tracing + Metrics)]
+  E --> F[Begin Root Span Context]
+  F --> G[Execute DB Operations with Context]
+  G --> H[Tracing Plugin Creates DB Spans]
+  G --> I[Metrics Plugin Collects DB Metrics]
+  H & I --> J[Export Traces and Metrics to Backend]
+  J --> K[Visualize in Jaeger / Prometheus]
+
+  style A fill:#f9f,stroke:#333,stroke-width:2px
+  style K fill:#bbf,stroke:#333,stroke-width:2px
+```
+
+---
+
+## Resources
+- [OpenTelemetry for GORM GitHub Repository](https://github.com/go-gorm/opentelemetry)
+- [OpenTelemetry Official Site](https://opentelemetry.io/)
+- [Jaeger Tracing Backend](https://www.jaegertracing.io/)
+- [Prometheus Monitoring System](https://prometheus.io/)
+
+
+
