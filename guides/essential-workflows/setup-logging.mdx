@@ -1,0 +1,236 @@
+---
+title: "Instrument GORM Logging with Logrus"
+description: "Learn how to replace GORM's default logger with Logrus for structured logs and span reporting. This tutorial guides you through writer configuration, threshold setup, and how log data can tie into your OpenTelemetry traces."
+---
+
+# Instrument GORM Logging with Logrus
+
+## Overview
+This guide teaches you how to replace GORM's default logger with Logrus to bring structured, contextual logs into your GORM operations. By integrating Logrus, you gain highly readable JSON logs enhanced with OpenTelemetry trace context, enabling easy correlation of logs and traces across distributed systems.
+
+You will configure a Logrus writer for GORM, customize log level thresholds, and understand how logs link to tracing spans using OpenTelemetry hooks.
+
+## Prerequisites
+- Basic familiarity with Go programming and dependency management
+- A Go environment with GORM and OpenTelemetry packages installed
+- Your project should already include GORM and OpenTelemetry basic setup (see [Basic Configuration](../getting-started/installation-and-configuration/basic-configuration))
+- Access to configure your GORM database connection and logger
+
+## What You'll Achieve
+- Replace GORM's logger with a Logrus-based implementation
+- Generate structured JSON logs that include OpenTelemetry trace and span IDs
+- Configure log level filtering and hooks for trace span reporting
+- Gain seamless observability integration between database logs and distributed traces
+
+## Estimated Time
+Approximately 15-30 minutes depending on your familiarity with GORM and Logrus
+
+---
+
+## Step-by-Step Instructions
+
+### 1. Import the Required Packages
+Add the following imports in your Go file:
+
+```go
+import (
+	"context"
+	"time"
+
+	"gorm.io/gorm/logger"
+	"gorm.io/plugin/opentelemetry/logging/logrus"
+)
+```
+
+### 2. Create a New Logrus Writer
+This wraps a Logrus logger instance with OpenTelemetry integration.
+
+```go
+writer := logrus.NewWriter()
+```
+
+You can customize the writer with options such as:
+- Providing a custom `*logrus.Logger`
+- Adjusting the log levels to be reported to traces
+- Enabling stack trace recording within spans
+
+Example with options:
+
+```go
+import "github.com/sirupsen/logrus"
+
+customLogger := logrus.New()
+customLogger.SetFormatter(&logrus.JSONFormatter{})
+
+writer := logrus.NewWriter(
+	logrus.WithLogger(customLogger),
+	logrus.WithTraceHookLevels([]logrus.Level{logrus.WarnLevel, logrus.ErrorLevel}),
+	logrus.WithRecordStackTraceInSpan(true),
+)
+```
+
+
+### 3. Configure GORM Logger with Logrus Writer
+Create a new GORM logger instance using the Logrus writer and set your desired logging configuration:
+
+```go
+gormLogger := logger.New(
+	writer,
+	logger.Config{
+		SlowThreshold: time.Millisecond, // Log queries slower than 1ms
+		LogLevel:      logger.Warn,     // Adjust log level as needed
+		Colorful:      false,           // Disable color for JSON logs
+	},
+)
+```
+
+### 4. Use the Custom Logger in Your GORM DB Instance
+When opening your GORM database connection, pass in the custom logger:
+
+```go
+db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{
+	Logger: gormLogger,
+})
+if err != nil {
+	panic(err)
+}
+```
+
+### 5. Logging with OpenTelemetry Context
+When logging with this setup, ensure you pass the `context.Context` containing OpenTelemetry spans, so logs automatically correlate with traces.
+
+Example:
+
+```go
+ctx, span := tracer.Start(context.Background(), "my-span")
+db.Logger.Info(ctx, "Executing query %s", "SELECT * FROM users")
+span.End()
+```
+
+If you log outside a span context, logs will output normally but without tracer metadata.
+
+---
+
+## How Logging Works Under the Hood
+- The Logrus writer adds a special OpenTelemetry trace hook to log entries.
+- When a log line occurs within a trace context, it automatically attaches:
+  - `trace_id`, `span_id`, and `trace_flags` fields to the log data
+  - Logs are also added as events within the active trace span, enhancing span visibility
+- Errors or warnings can update the span status to `Error` and optionally record stack traces
+
+This integration bridges Logs and Traces for robust observability.
+
+---
+
+## Practical Example
+
+```go
+package main
+
+import (
+	"context"
+	"time"
+
+	"github.com/sirupsen/logrus"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
+	"gorm.io/plugin/opentelemetry/logging/logrus"
+	"go.opentelemetry.io/otel"
+)
+
+func main() {
+	// Setup OpenTelemetry tracer (basic example omitted for brevity)
+	tracer := otel.Tracer("example-tracer")
+
+	// Setup Logrus logger with JSON formatting
+	customLogger := logrus.New()
+	customLogger.SetFormatter(&logrus.JSONFormatter{})
+
+	// Create Logrus writer with options
+	writer := logrus.NewWriter(
+		logrus.WithLogger(customLogger),
+		logrus.WithRecordStackTraceInSpan(true),
+	)
+
+	// Create GORM logger
+	gormLogger := logger.New(writer, logger.Config{
+		SlowThreshold: time.Millisecond,
+		LogLevel:      logger.Warn,
+		Colorful:      false,
+	})
+
+	// Open DB connection with GORM logger
+	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{Logger: gormLogger})
+	if err != nil {
+		panic(err)
+	}
+
+	// Use OpenTelemetry context when logging
+	ctx, span := tracer.Start(context.Background(), "root-operation")
+	defer span.End()
+
+	// Example log with context
+	db.Logger.Info(ctx, "Starting database query")
+
+	// Normal query
+	db.Exec("SELECT 1")
+
+	// Log a warning inside span
+	db.Logger.Warn(ctx, "Query took longer than expected")
+}
+```
+
+---
+
+## Tips & Best Practices
+
+- **Always pass context** when logging to ensure log entries correlate with active tracing spans.
+- For **performance**, adjust your `SlowThreshold` and `LogLevel` in the logger configuration to reduce noise.
+- Use the **`WithRecordStackTraceInSpan(true)`** option to get detailed stack traces in error spans for easier debugging.
+- Customize **Logrus hooks or logger** to fit your existing logging infrastructure or output formats.
+- Combine this logging setup with other OpenTelemetry plugins for tracing and metrics to get unified observability.
+
+---
+
+## Troubleshooting
+
+<AccordionGroup title="Common Issues and Solutions">
+<Accordion title="Logs Don't Show Trace IDs or Span IDs">
+Check if your log calls include a valid context.Context with an active OpenTelemetry span. Logs outside trace context will not contain trace metadata.
+</Accordion>
+<Accordion title="Format of Log Output is Not JSON">
+Verify that your Logrus logger formatter is set to `logrus.JSONFormatter`. The default GORM logger may use plain text.
+Override with:
+```go
+customLogger.SetFormatter(&logrus.JSONFormatter{})
+```
+</Accordion>
+<Accordion title="Stack Traces Not Included in Error Spans">
+Confirm you enabled `WithRecordStackTraceInSpan(true)` on your Logrus writer options. This setting controls stack trace recording in trace spans.
+</Accordion>
+<Accordion title="Logger Methods Not Working as Expected">
+Use only the exposed Logrus writer methods via `NewWriter()`. Do not mix with unrelated logger implementations to ensure proper hook functioning.
+</Accordion>
+</AccordionGroup>
+
+---
+
+## Next Steps & Related Content
+
+- **Enable Tracing and Metrics Collection:** After setting up logging, enhance observability by enabling full tracing and metrics in GORM with OpenTelemetry. See [Enable Tracing and Metrics Collection Guide](/guides/essential-workflows/enable-tracing-metrics).
+- **Configure Tracing Without Metrics:** Learn how to focus only on tracing if metrics are not needed. See [Configure Tracing Without Metrics Guide](/guides/essential-workflows/configure-only-tracing).
+- **Validate Your Setup:** Use validation steps to ensure logs and traces are correctly generated and reported. See [Validation Steps](/getting-started/validation-and-troubleshooting/validation-steps).
+- **Troubleshooting Common Issues:** For issues beyond logging, consult common troubleshooting documentation. See [Troubleshooting Guide](/getting-started/validation-and-troubleshooting/troubleshooting).
+
+---
+
+## References
+- [GORM OpenTelemetry Logger API](https://github.com/go-gorm/opentelemetry/tree/main/logging/logrus)
+- [Logrus Official Documentation](https://github.com/sirupsen/logrus)
+- OpenTelemetry Specification: [Log Correlation](https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/logs/overview.md)
+
+
+---
+
+Unlock powerful, structured observability in your GORM-powered Go applications by switching your database logger to Logrus with OpenTelemetry integration today.
