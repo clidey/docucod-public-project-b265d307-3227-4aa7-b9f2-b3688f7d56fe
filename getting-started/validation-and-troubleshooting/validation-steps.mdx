@@ -1,0 +1,261 @@
+---
+title: "Validating Your Setup"
+description: "Explains how to verify that observability data is flowing correctly: confirming traces, metrics, and logs appear as expected. Includes pointers to example validation YAML and Docker configs."
+---
+
+# Validating Your Setup
+
+Ensuring the OpenTelemetry instrumentation for your GORM-based application is correctly capturing and sending observability data—traces, metrics, and logs—is critical to unlocking the powerful insights provided by this plugin. This guide walks you through how to validate that your setup is working as expected and points to relevant example configurations you can use to test tracing and metrics collection.
+
+---
+
+## 1. Confirming Traces Are Generated and Exported
+
+Tracing enables you to see detailed information about each database operation within your application.
+
+### Step 1: Enable a Trace Exporter
+
+- If you have not done so already, configure a trace exporter such as Jaeger.
+- You can run Jaeger locally using the provided Docker Compose example:
+
+```shell
+cd examples/demo
+
+docker-compose up -d
+```
+
+This starts the Jaeger all-in-one service exposing ports `16686` for the UI and `14268` for trace ingestion.
+
+### Step 2: Set Environment Variables
+
+Configure your application to send traces to the Jaeger endpoint:
+
+```shell
+export OTEL_EXPORTER_JAEGER_ENDPOINT=http://localhost:14268/api/traces
+```
+
+### Step 3: Run Your Application
+
+Execute your GORM instrumented app with the OpenTelemetry plugin enabled, targeting your database.
+
+For example:
+
+```shell
+cd examples/demo
+ go run main.go
+```
+
+### Step 4: Verify Traces in Jaeger UI
+
+- Open [http://localhost:16686](http://localhost:16686) in your browser.
+- Search for your service name or look for recently created traces.
+- Inspect the spans associated with GORM operations such as `CREATE`, `QUERY`, `DELETE`.
+
+You should see spans showing SQL queries, their duration, and attributes like `db.system`, `db.operation`, and `server.address`.
+
+<Tip>
+If traces are not visible, verify your application logging, environment variable, and network connectivity.
+Ensure the plugin’s span creation hooks are active and the tracer provider is correctly set.
+</Tip>
+
+---
+
+## 2. Confirming Metrics Are Collected and Accessible
+
+Metrics give you aggregated insights into database connection usage and operation counts.
+
+### Step 1: Deploy Metrics and Prometheus
+
+Use the provided metrics example with Prometheus:
+
+```shell
+cd examples/metric
+docker-compose up -d
+```
+
+This sets up two services:
+- `metrics` service exporting OpenTelemetry metrics on port `8088`
+- `prometheus` server scraping metrics on port `9090`
+
+### Step 2: Access Prometheus UI
+
+Open [http://localhost:9090](http://localhost:9090) in your browser.
+
+### Step 3: Query Metrics
+
+Search for relevant metric names related to GORM, such as:
+
+```
+go_sql_connections_max_idle
+```
+
+These metrics indicate your DB connection pool status and overall activity.
+
+### Step 4: Use Custom Scrape Configuration
+
+The `prometheus.yml` provided sets the scrape interval to 15 seconds and adds your metrics target:
+
+```yaml
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'opentelemetry'
+    static_configs:
+      - targets: ['metrics:8088']
+```
+
+Review this file to customize scraping behavior.
+
+<Warning>
+Metrics may not appear immediately; Prometheus refreshes every 15 seconds by default.
+Check that the metrics service is running and reachable.
+</Warning>
+
+---
+
+## 3. Confirming Logs Are Emitted with Trace Context
+
+Logs enable correlation between events and trace spans for richer observability.
+
+### Step 1: Configure GORM Logger with OpenTelemetry Support
+
+Follow the installation instructions to integrate the `logrus` or `slog` writer with GORM's logger.
+
+Example usage with Logrus:
+
+```go
+logger := logger.New(
+  logrus.NewWriter(),
+  logger.Config{
+    SlowThreshold: time.Millisecond,
+    LogLevel: logger.Warn,
+    Colorful: false,
+  },
+)
+db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{Logger: logger})
+if err != nil {
+  panic(err)
+}
+```
+
+### Step 2: Run Your Application and Observe Logs
+
+Run the application to see logs printed to standard output or designated log destinations.
+
+Logs related to database queries should include trace IDs and span IDs.
+
+### Step 3: Verify Trace Context in Logs
+
+Logs instrumented by the OpenTelemetry plugin embed trace context for seamless correlation with traces.
+
+<Tip>
+If your logs do not show trace context:
+- Confirm you are passing the context with active spans when logging.
+- Verify log levels include the severity of your messages.
+</Tip>
+
+---
+
+## 4. Example Validation Configuration Files
+
+You can reference or adapt these provided files to validate your setup.
+
+### Docker Compose for Tracing and Visualization
+
+```yaml
+version: "3.7"
+services:
+  jaeger-all-in-one:
+    image: jaegertracing/all-in-one:latest
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686"
+      - "14268:14268"
+      - "14250:14250"
+      - "6831:6831"
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+    ports:
+      - "3000:3000"
+```
+
+### Prometheus Configuration Example
+
+```yaml
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+rule_files: []
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'opentelemetry'
+    static_configs:
+      - targets: ['metrics:8088']
+```
+
+---
+
+## 5. Troubleshooting Tips for Validation
+
+- **No traces visible:**
+  - Confirm environment variables for exporters are set correctly.
+  - Check network and firewall rules.
+  - Ensure your app is instrumented and actually executing database operations.
+
+- **Metrics missing or stale:**
+  - Validate that metrics service and Prometheus are running.
+  - Check scrape target URLs and ports.
+  - Confirm Prometheus scrape interval is short enough.
+
+- **Logs lack trace context:**
+  - Ensure the context carrying active spans is correctly passed to logs.
+  - Check logger integration matches recommended setup.
+
+- **Exporter connection errors:**
+  - Inspect exporter endpoint URLs for typos.
+  - Use logs to identify connection timeouts or refusals.
+
+<Tip>
+Refer to the "Troubleshooting Common Issues" guide for detailed handling of validation problems and recovery steps.
+</Tip>
+
+---
+
+## 6. Next Steps
+
+- After confirming trace, metric, and log data flows correctly, explore the [First Usage Example](/getting-started/installation-and-configuration/example-usage) to run your first complete observability scenarios.
+- Dive into configuration options on the [Basic Configuration](/getting-started/installation-and-configuration/basic-configuration) page to customize telemetry features.
+- If issues arise, visit the [Troubleshooting](/getting-started/validation-and-troubleshooting/troubleshooting) page for resolution guidance.
+- Extend observability by integrating with full monitoring stacks, such as Grafana, leveraging the included Docker Compose setups.
+
+---
+
+
+## References
+
+- [Jaeger UI](http://localhost:16686) - Trace visualization
+- [Prometheus UI](http://localhost:9090) - Metrics exploration
+- [GORM OpenTelemetry GitHub Repository](https://github.com/go-gorm/opentelemetry)
+- Related docs: [Installation](/getting-started/installation-and-configuration/installation), [Basic Configuration](/getting-started/installation-and-configuration/basic-configuration)
+
+---
+
+*This page ensures that you confidently verify your OpenTelemetry for GORM integration is capturing the observability signals you expect so you can proceed to monitoring and debugging with full visibility.*

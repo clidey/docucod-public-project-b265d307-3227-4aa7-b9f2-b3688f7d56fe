@@ -1,0 +1,122 @@
+---
+title: "What is OpenTelemetry for GORM?"
+description: "Learn what this integration provides: seamless tracing, metrics collection, and logging in Go applications using GORM. Understand how it enhances observability into your database workload with minimal configuration."
+---
+
+# What is OpenTelemetry for GORM?
+
+OpenTelemetry for GORM is a powerful integration plugin that seamlessly embeds observability features—tracing, metrics collection, and structured logging—directly into your Go applications using the GORM ORM library. This plugin enriches your database workloads with deep visibility, enabling you to monitor SQL operations, measure performance metrics, and trace transactions with minimal coding effort.
+
+By integrating with OpenTelemetry, the industry-standard observability framework, this plugin transforms your GORM-powered data interactions into rich telemetry signals that feed modern monitoring and tracing tools.
+
+---
+
+## Why Use OpenTelemetry for GORM?
+
+In modern distributed systems, understanding how database queries impact application performance is critical. This plugin allows you to:
+
+- **Trace database calls:** Automatically trace GORM operations such as SQL queries, inserts, updates, and deletes.
+- **Collect metrics:** Monitor database status and key indicators such as connections or operation latency.
+- **Structured logging:** Replace GORM's default logger with enhanced logging backed by Logrus, tying logs with trace context for improved root cause analysis.
+
+All of this is achieved with minimal configuration, preserving the simplicity of GORM while dramatically improving observability.
+
+---
+
+## Key Benefits
+
+- **Zero code disruption:** Plug the OpenTelemetry plugin into an existing GORM instance without changing your SQL code.
+- **Fine-grained tracing:** Hooks on all major GORM actions (Create, Query, Update, Delete, Row, Raw) ensure comprehensive coverage.
+- **Metrics out-of-the-box:** Collect runtime and DB-level metrics automatically.
+- **Enhanced logging:** Swap standard logger with Logrus integration for consistent, rich logs.
+- **Compatibility and flexibility:** Works with various OpenTelemetry exporters, supports enabling/disabling tracers and metrics independently.
+
+---
+
+## How This Integration Enhances Observability
+
+OpenTelemetry for GORM acts as a telemetry bridge that captures every meaningful event around your database operations. It injects context propagation to maintain trace continuity across distributed systems, which is crucial for correlating database calls within full request lifecycles.
+
+Metrics collection enables monitoring real-time DB health, such as connection pool usage, which is vital for capacity planning and alerting.
+
+Structured logging ties detailed SQL operation metadata to trace spans, helping pinpoint performance bottlenecks faster.
+
+---
+
+## Typical User Flow
+
+1. **Initialize your GORM DB instance.**
+2. **Attach the OpenTelemetry tracing plugin** to enable automatic instrumentation.
+3. **Optionally replace the logger** with the Logrus-backed logger for enriched logging.
+4. **Run your application and observe telemetry data** appearing in tracing tools like Jaeger or metric dashboards like Prometheus.
+
+This flow drastically elevates your app’s observability posture with just a few lines of code added.
+
+---
+
+## Example: Quick Peek at Using the Plugin
+
+```go
+import (
+  "gorm.io/driver/sqlite"
+  "gorm.io/gorm"
+  "gorm.io/plugin/opentelemetry/tracing"
+)
+
+func main() {
+  db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+  if err != nil {
+    panic(err)
+  }
+
+  if err := db.Use(tracing.NewPlugin()); err != nil {
+    panic(err)
+  }
+
+  // Now every GORM operation is traced and metrics collected automatically
+}
+```
+
+---
+
+## What You Gain Immediate Insight Into
+
+- SQL statements executed by GORM
+- Latency and success/failure counts
+- Connection pool usage and runtime metrics
+- Correlated logs with trace spans
+
+This integration makes these insights available without manually instrumenting your database layer.
+
+---
+
+## Related Documentation and Next Steps
+
+To harness the full power of this integration, you should explore the following related pages:
+
+- [System Requirements & Prerequisites](/getting-started/introduction-and-prerequisites/prerequisites) — Understand what your environment needs
+- [Installation](/getting-started/installation-and-configuration/installation) — How to add OpenTelemetry for GORM to your project
+- [Configuring OpenTelemetry Features](/getting-started/installation-and-configuration/basic-configuration) — Customize tracing and metrics
+- [First Usage Example](/getting-started/installation-and-configuration/example-usage) — Run your first traced database query
+- [Validating Your Setup](/getting-started/validation-and-troubleshooting/validation-steps) — Confirm your telemetry is working
+- [Troubleshooting Common Issues](/getting-started/validation-and-troubleshooting/troubleshooting) — Fix common setup pitfalls
+
+---
+
+<Tip>
+OpenTelemetry for GORM works best when combined with popular observability backends like Jaeger for tracing and Prometheus for metrics, allowing seamless visualization of database performance.
+</Tip>
+
+<Note>
+This plugin focuses on GORM database operations and related telemetry; if you need to instrument other parts of your application, consider additional OpenTelemetry instrumentation.
+</Note>
+
+## Additional Resources
+
+- Official OpenTelemetry project: https://opentelemetry.io/
+- GORM ORM library: https://gorm.io/
+- OpenTelemetry Go SDK: https://github.com/open-telemetry/opentelemetry-go
+
+---
+
+By adopting OpenTelemetry for GORM, you equip your Go applications with deep, actionable insights into database behavior—empowering you to optimize performance, troubleshoot faster, and deliver resilient services.

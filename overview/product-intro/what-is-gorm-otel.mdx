@@ -1,0 +1,188 @@
+---
+title: "What is GORM OpenTelemetry?"
+description: "Learn what the GORM OpenTelemetry integration is, its core purpose, and how it adds observability (tracing, metrics, logging) to your GORM-powered applications using OpenTelemetry. Understand the main value it brings to development and operations teams."
+---
+
+# What is GORM OpenTelemetry?
+
+## Unlocking Full Observability for Your GORM Applications
+
+GORM OpenTelemetry is a powerful integration that seamlessly adds observability to your GORM-powered applications by leveraging the OpenTelemetry framework. It enriches your database interactions with comprehensive tracing, metrics, and logging, enabling deep insights into how your application communicates with databases.
+
+### Why It Matters
+Modern applications demand rich observability to diagnose performance issues, understand query patterns, and monitor system health. With GORM OpenTelemetry, developers and operations teams gain detailed telemetry data that bridges the gap between application code and the underlying database actions — all with minimal setup.
+
+### Key Value Propositions
+- **End-to-End Tracing:** Automatically generates trace spans for all common GORM operations (`Create`, `Query`, `Delete`, `Update`, `Row`, `Raw`).
+- **Database Metrics:** Collects runtime statistics directly from your database connection pool, such as connection usage and wait times.
+- **Enhanced Logging:** Replaces GORM’s default logger with Logrus instrumentation, integrating logs with trace context.
+- **Seamless Integration:** Easy to add as a plugin in GORM with fine-grained configuration options.
+
+### Who Should Use This?
+- Backend developers building applications with GORM who want to improve visibility into database calls.
+- DevOps and SRE teams seeking actionable telemetry to proactively monitor and troubleshoot database interactions.
+- Teams aiming to unify application and database observability under the OpenTelemetry standard.
+
+---
+
+## What is GORM OpenTelemetry?
+
+### Simple Definition
+GORM OpenTelemetry is a plugin that instruments your GORM database operations by integrating with the OpenTelemetry observability framework. It enriches your application's database interactions with structured trace spans, metric reporting, and enhanced logging.
+
+### Core Purpose
+It enables developers and operators to automatically capture critical telemetry data for every database operation managed by GORM without manually modifying query code. This includes tracing the lifecycle of each GORM operation, collecting database connection usage metrics, and linking log entries with trace contexts.
+
+### What Problem Does It Solve?
+- **Lack of visibility:** It is difficult to isolate performance or errors related to specific SQL operations in complex applications.
+- **Manual instrumentation burden:** Manually adding tracing and metrics for database queries is tedious, error-prone, and inconsistent.
+- **Disconnected telemetry data:** Logs, traces, and metrics often remain siloed, complicating end-to-end debugging.
+
+By automating instrumentation with GORM OpenTelemetry, you gain unified, consistent, and useful observability data that pinpoints database-related issues and optimizes performance.
+
+### Unique Differentiators
+- **Specific to GORM:** Designed as a native GORM plugin, it integrates tightly with GORM’s callback lifecycle.
+- **Supports Metrics & Logs, besides Tracing:** Not just traces—also collects detailed DB stats and integrates with structured logging.
+- **Automatic Query Analysis:** Parses executed SQL to attribute spans appropriately (operation type, table, summary).
+- **Configurable to exclude sensitive query variables or server info to meet privacy/security requirements.**
+
+### How It Works
+Without overwhelming technical detail, here is a high-level overview:
+- It registers hooks on all primary GORM callbacks (`Before` and `After` events for create, query, update, delete, row, and raw operations).
+- Before a GORM operation, it starts a new OpenTelemetry span with contextual information.
+- After the operation, it finalizes the span, annotating it with metadata such as SQL query text (optionally redacted), operation type, table name, rows affected, and any errors.
+- It also ties into Go’s database/sql statistics to emit real-time metrics on connection pool usage.
+- Logging is enhanced by replacing GORM’s logger with a Logrus-based logger that attaches trace context to logs and reports error status to spans.
+
+---
+
+## Key Features & Capabilities
+
+| Feature                | Description                                                                                                   | User Benefit                                                                                  |
+|------------------------|---------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------|
+| **Comprehensive Tracing** | Hooks into all major GORM database lifecycle events for CRUD and raw queries.                                  | Visualize and track every database operation end-to-end without manual instrumentation.       |
+| **Query Context & Attributes** | Automatically parses and annotates spans with operation name, affected table, query summary, and sanitized SQL.  | Quickly identify what SQL was executed and its impact on performance or errors.               |
+| **Metrics Collection** | Gathers runtime database connection pool statistics such as open connections, idle connections, and wait times. | Monitor database health and optimize resources with actionable telemetry.                      |
+| **Trace-Enabled Logging** | Replaces default GORM logger with Logrus integration to add trace IDs and span IDs into logs.                     | Correlate logs with trace data for faster, richer debugging.                                 |
+| **Configurable Plugin** | Options to disable metrics, exclude query variables, hide server address info, and customize query formatting.  | Tailor observability features to your security, privacy, and operational policies.           |
+
+---
+
+## Why Should I Care?
+
+### Outcomes You Can Expect
+- **Improved Debugging Speed:** Quickly pinpoint problematic queries by tracing them with exact SQL and error context.
+- **Better Performance Insights:** Identify inefficient queries and bottlenecks through detailed telemetry.
+- **Unified Observability:** Integrate database telemetry seamlessly with your existing OpenTelemetry-based tracing and monitoring.
+- **Reduced Manual Effort:** Enable automatic instrumentation with minimal code changes, accelerating observability adoption.
+
+### Common Use Cases
+- Troubleshooting query errors and understanding failure points.
+- Monitoring database connection pool utilization to prevent saturation.
+- Analyzing query latencies across service calls.
+- Correlating database operations with user-facing transaction traces.
+
+### Before and After
+| Without GORM OpenTelemetry                                          | With GORM OpenTelemetry                                                     |
+|---------------------------------------------------------------------|----------------------------------------------------------------------------|
+| Database issues are hidden inside logs or separate DB dashboards.   | Trace spans tie SQL queries into service traces with full visibility.      |
+| Manual tracing adds overhead and is prone to inconsistency.        | Instrumentation is automatic and consistent across all queries.            |
+| Metrics on DB health require separate tooling setup and integration.| Real-time DB stats are collected and exported via OpenTelemetry metrics API.|
+
+### Measurable Gains
+- Eliminate hours of trial-and-error debugging.
+- Capture detailed metrics that help reduce DB downtime.
+- Improve developer productivity with out-of-the-box instrumentation.
+
+---
+
+## Getting Started Preview
+
+### Quick Setup Steps
+1. **Add the Plugin:** Import `gorm.io/plugin/opentelemetry/tracing` and register it with your GORM instance using `db.Use(tracing.NewPlugin())`.
+2. **Configure Logger (optional):** Replace GORM’s default logger with the Logrus integration from `gorm.io/plugin/opentelemetry/logging/logrus`.
+3. **Enable Metrics:** By default, metrics collection activates with the tracing plugin; you can turn it off if desired.
+
+### Prerequisites
+- A Go application using GORM as your ORM layer.
+- An OpenTelemetry-compatible backend (Jaeger, Prometheus, etc.) to receive telemetry data.
+- Basic understanding of tracing concepts and OpenTelemetry setup.
+
+### Next Steps
+- Visit the **Installation** page for detailed dependency instructions.
+- Explore **Configuring OpenTelemetry Features** to customize tracing and metrics.
+- Try the **First Usage Example** for a step-by-step tutorial.
+
+---
+
+## Practical Example: Tracing Your First Query
+```go
+import (
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+	"gorm.io/plugin/opentelemetry/tracing"
+)
+
+func main() {
+	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+	if err != nil {
+		panic(err)
+	}
+
+	// Attach the OpenTelemetry plugin with tracing and metrics enabled
+	if err := db.Use(tracing.NewPlugin()); err != nil {
+		panic(err)
+	}
+
+	// Run a simple raw SQL query with context propagation
+	var result int
+	err = db.Raw("SELECT 42").Scan(&result).Error
+	if err != nil {
+		panic(err)
+	}
+
+	println("Query result:", result)
+}
+```
+In this example, every GORM call is traced automatically. The trace spans carry SQL query details and operation metadata, ready to export to your OpenTelemetry backend.
+
+---
+
+## Tips & Best Practices
+- **Exclude Sensitive Data:** Use plugin options to exclude query variables if your queries contain sensitive information.
+- **Optimize Metrics:** If you only need tracing, disable metrics to reduce overhead.
+- **Use with OpenTelemetry Provider:** Pair with the default OpenTelemetry provider to streamline telemetry collection and export.
+- **Correlate Logs and Traces:** Combine this plugin with the Logrus logger integration to enrich logs with trace context.
+
+---
+
+## Troubleshooting Common Issues
+
+<AccordionGroup title="Common Challenges and Solutions">
+<Accordion title="Tracing Spans Not Appearing in Backend">
+- Ensure you have set up an OpenTelemetry exporter (Jaeger, Zipkin, etc.) running and reachable.
+- Confirm your tracer provider is configured and installed.
+- Check that your application context propagation is intact.
+</Accordion>
+<Accordion title="Metrics Are Missing or Stale">
+- Confirm your DB instance is accessible and supports connection pool statistics.
+- Check whether metrics collection was disabled via plugin options.
+- Verify your metrics exporter endpoint and scraping configuration.
+</Accordion>
+<Accordion title="Logs Do Not Include Trace Context">
+- Replace the default GORM logger with the Logrus integration from this plugin.
+- Verify that logs are emitted within an active span context.
+</Accordion>
+</AccordionGroup>
+
+---
+
+For more sophisticated setups or integration guidance, explore other overview pages such as **Core Features at a Glance** and **High-Level Architecture.**
+
+---
+
+## Learn More & Resources
+- [GORM OpenTelemetry GitHub Repository](https://github.com/go-gorm/opentelemetry)
+- [OpenTelemetry Official Site](https://opentelemetry.io/)
+- Example Usage and Demo in the `examples/` directory within the repository
+- Related pages in the documentation for **Installation**, **Configuration**, and **Real-world Examples**

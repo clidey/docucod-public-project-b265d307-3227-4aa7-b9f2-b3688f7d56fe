@@ -1,0 +1,200 @@
+---
+title: "Installation"
+description: "Step-by-step instructions for adding the OpenTelemetry plugin to your Go project. Covers go-getting the modules and reviewing example application setups."
+---
+
+# Installation Guide for GORM OpenTelemetry Plugin
+
+This guide provides clear, actionable steps to add the OpenTelemetry plugin to your Go project using GORM. You will learn how to fetch the required Go modules, include the plugin in your application, and review example setups for tracing and metrics.
+
+---
+
+## 1. Prerequisites
+
+Before starting the installation:
+
+- **Go Environment:** Ensure Go is installed (preferably Go 1.18 or later).
+- **GORM Installed:** Your project should already use GORM for database operations.
+- **OpenTelemetry Dependencies:** These will be fetched automatically when adding the plugin, but ensure your environment can access external Go modules.
+
+<Tip>
+If you are new to GORM or OpenTelemetry, consider reviewing the [System Requirements & Prerequisites](/getting-started/introduction-and-prerequisites/prerequisites) page first.
+</Tip>
+
+---
+
+## 2. Installation Steps
+
+### Step 1: Get the OpenTelemetry Plugin Modules
+
+Run the following Go command to add the OpenTelemetry plugin modules to your project's dependencies:
+
+```shell
+// For the tracing plugin with metrics support
+go get gorm.io/plugin/opentelemetry/tracing
+
+// For logging support via logrus, optionally:
+go get gorm.io/plugin/opentelemetry/logging/logrus
+```
+
+This step downloads the necessary modules for tracing, metrics, and logging integration.
+
+### Step 2: Add the Plugin to Your Go Code
+
+Modify your Go application to use the OpenTelemetry plugin when initializing your GORM DB instance.
+
+Example with tracing and metrics enabled (default):
+
+```go
+package main
+
+import (
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+	"gorm.io/plugin/opentelemetry/tracing"
+)
+
+func main() {
+	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+	if err != nil {
+		panic(err)
+	}
+
+	// Use the OpenTelemetry plugin with tracing and metrics (enabled by default)
+	if err := db.Use(tracing.NewPlugin()); err != nil {
+		panic(err)
+	}
+
+	// db is now instrumented for tracing and metrics
+}
+```
+
+### Step 3: Add Tracing Without Metrics (Optional)
+
+If you want to enable tracing only and disable metrics:
+
+```go
+import (
+	"gorm.io/plugin/opentelemetry/tracing"
+)
+
+// ...
+if err := db.Use(tracing.NewPlugin(tracing.WithoutMetrics())); err != nil {
+	panic(err)
+}
+```
+
+### Step 4: Set Up Logging Support (Optional)
+
+If you want to integrate logging with OpenTelemetry and replace GORM's default logger:
+
+```go
+import (
+	"time"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
+	"gorm.io/plugin/opentelemetry/logging/logrus"
+)
+
+func main() {
+	log := logger.New(
+		logrus.NewWriter(),
+		logger.Config{
+			SlowThreshold: time.Millisecond,
+			LogLevel:      logger.Warn,
+			Colorful:      false,
+		},
+	)
+
+	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{Logger: log})
+	if err != nil {
+		panic(err)
+	}
+
+	// db is now instrumented with OpenTelemetry logging
+}
+```
+
+---
+
+## 3. Verify Installation Using the Demo Example
+
+The repository includes demo examples showcasing tracing behavior.
+
+### Run the Stdout Exporter Demo
+
+1. Navigate to the demo directory:
+
+```shell
+cd examples/demo
+```
+
+2. Run the example:
+
+```shell
+go run main.go
+```
+
+3. You will see trace output printed to the console in a human-readable format.
+
+### Run the Jaeger Exporter Demo
+
+1. Start the Jaeger service with Docker Compose:
+
+```shell
+docker-compose up -d
+```
+
+2. Set the required environment variable to point traces to Jaeger:
+
+```shell
+export OTEL_EXPORTER_JAEGER_ENDPOINT=http://localhost:14268/api/traces
+```
+
+3. Run the demo application:
+
+```shell
+cd examples/demo
+go run main.go
+```
+
+4. Open http://localhost:16686 in your browser to visualize trace data in the Jaeger UI.
+
+<Tip>
+Make sure Docker is installed and running to use the Jaeger demo.
+</Tip>
+
+![stdout.png](static/stdout.png)
+
+![jaeger.png](static/jaeger.png)
+
+---
+
+## 4. Troubleshooting Tips
+
+- **Module Not Found or Download Issues:** Verify your Go environment can access external modules. Try `go mod tidy` to sync dependencies.
+- **Permission Issues Running Docker Compose:** Ensure you have the necessary permissions or try running `docker-compose` commands with elevated privileges.
+- **No Trace Output:** Confirm your app uses the `tracing.NewPlugin()` correctly and that the tracer provider is set (usually defaults to the global provider).
+- **Jaeger UI Not Accessible:** Ensure ports `16686` and `14268` are not blocked by your firewall.
+
+---
+
+## 5. Next Steps
+
+- Explore [Configuring OpenTelemetry Features](/getting-started/installation-and-configuration/basic-configuration) to customize tracing and metrics.
+- Try the [First Usage Example](/getting-started/installation-and-configuration/example-usage) to learn how to run your first instrumented DB query.
+- For monitoring, explore integrations with Prometheus and Grafana as shown in the [metrics examples](examples/metric/README.md).
+
+---
+
+## Additional Resources
+
+- Official repository: [https://github.com/go-gorm/opentelemetry](https://github.com/go-gorm/opentelemetry)
+- [Overview of GORM OpenTelemetry](../overview/product-intro/what-is-gorm-otel)
+- [Logging Setup with Logrus Guide](../guides/essential-workflows/setup-logging)
+- OpenTelemetry specification: https://opentelemetry.io/
+
+---
+
+This completes the installation process for the GORM OpenTelemetry plugin. Follow these steps to instrument your Go applications with powerful observability features instantly.

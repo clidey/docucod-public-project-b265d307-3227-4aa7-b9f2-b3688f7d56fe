@@ -1,0 +1,126 @@
+---
+title: "Core Features at a Glance"
+description: "Quickly review the main features supported: GORM operation tracing, database metrics collection, advanced logging using Logrus, flexible provider setup, and seamless environment variable configuration. Grasp how these features address common database monitoring needs."
+---
+
+# Core Features at a Glance
+
+Discover the essential capabilities that make the GORM OpenTelemetry plugin a powerful tool for monitoring and understanding your database operations. This page provides a focused overview of the core features—tracing, metrics collection, advanced logging, provider setup, and environment-based configuration—revealing how these empower you to gain deep insights into your GORM-powered applications.
+
+---
+
+## Unlocking Visibility into GORM Operations
+
+At its heart, the GORM OpenTelemetry plugin adds observability to your database interactions by seamlessly integrating OpenTelemetry features:
+
+- **Operation Tracing:** Tracks the lifecycle of key database commands like `Create`, `Query`, `Delete`, `Update`, `Row`, and `Raw`.
+- **Metrics Collection:** Gathers vital database statistics and connection status that help you monitor database health.
+- **Advanced Logging:** Replaces GORM’s default logger with **Logrus**, bringing enhanced structured logging and span reporting.
+- **Flexible Provider Setup:** Offers an out-of-the-box OpenTelemetry provider that can be customized or replaced as needed.
+- **Environment Variable Configuration:** Simplifies runtime customization through environment variables for effortless integration.
+
+Together, these features empower developers to monitor, troubleshoot, and optimize database interactions with accuracy and minimal overhead.
+
+---
+
+## Core Features & Their Benefits
+
+### 1. GORM Operation Tracing
+Trace every critical database operation with minimal setup. The plugin hooks into GORM’s lifecycle callbacks for `Create`, `Query`, `Delete`, `Update`, `Row`, and `Raw` operations and automatically generates spans for each.
+
+- **Benefit:** Quickly pinpoint bottlenecks or errors by visualizing detailed trace data.
+- **How It Works:** Spans include enriched attributes such as the exact SQL query, operation type, table name, and rows affected.
+
+### 2. Database Metrics Collection
+Proactively monitor the health of your database connections.
+
+- **Benefit:** Gain actionable metrics like active connections and max idle connections, which are vital for capacity planning and debugging.
+- **How It Works:** The plugin reports standard DB stats metrics available via OpenTelemetry, which can be scraped and visualized by tools like Prometheus.
+
+### 3. Enhanced Logging with Logrus
+Replace the GORM default logger with Logrus for modern, structured logging.
+
+- **Benefit:** Logging integrates with trace spans, ensuring key messages are correlated with trace contexts.
+- **How It Works:** You configure Logrus as GORM’s logger and the plugin hooks it to emit tracing events with error and slow query detection.
+
+### 4. Default OpenTelemetry Provider
+Start with a ready-to-use OpenTelemetry provider optimized for GORM tracing and metrics.
+
+- **Benefit:** Streamlines setup with sensible defaults that you can customize or override as needed.
+- **How It Works:** The provider configuration respects environment variables, allowing you to switch exporters, endpoints, and sampling policies without code changes.
+
+### 5. Environment Variable Configuration
+Tune behavior at runtime simply by setting environment variables.
+
+- **Benefit:** Easily adapt tracing and metrics collection to different deployment environments without rebuilding.
+- **How It Works:** Variables like `OTEL_EXPORTER_JAEGER_ENDPOINT` or sampling rates propagate through the provider setup automatically.
+
+---
+
+## Real-World Examples
+
+- **Tracing with Jaeger:** Run your GORM app with the OpenTelemetry Jaeger exporter enabled, and effortlessly visualize detailed SQL operation traces in the Jaeger UI.
+
+- **Metrics with Prometheus:** Enable metrics export and scrape the app with Prometheus to keep an eye on database connection pools and query performance.
+
+- **Logging with Logrus:** Integrate with Logrus to get contextual logs linked to traces and improve issue diagnosis.
+
+These concrete use cases demonstrate how the core features solve common monitoring challenges effectively.
+
+---
+
+## Getting Started Preview
+
+To begin exploring these features:
+
+```go
+// Enable Logrus logging
+import (
+  "gorm.io/gorm/logger"
+  "gorm.io/plugin/opentelemetry/logging/logrus"
+)
+
+logger := logger.New(
+  logrus.NewWriter(),
+  logger.Config{
+    SlowThreshold: time.Millisecond, // Flag slow queries
+    LogLevel:      logger.Warn,      // Log warnings and errors
+    Colorful:      false,
+  },
+)
+db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{Logger: logger})
+```
+
+```go
+// Enable tracing and metrics
+import ("gorm.io/plugin/opentelemetry/tracing")
+
+if err := db.Use(tracing.NewPlugin()); err != nil {
+  panic(err)
+}
+```
+
+See [examples](https://github.com/go-gorm/opentelemetry/tree/main/examples) for ready-to-run demos.
+
+---
+
+## Practical Tips
+
+- Avoid excluding query variables in spans if you want full query context, but trim them if sensitive information may be present.
+- Use environment variables to switch exporters (e.g., Jaeger, Prometheus) without changing code.
+- Combine tracing and metrics to get both detailed operation-level data and overall health indicators.
+
+---
+
+## Troubleshooting Highlights
+
+- If you don’t see spans in your tracing backend, verify your environment variables and exporter endpoint configurations.
+- Slow query logging threshold can be tuned to capture relevant queries without noise.
+- Check that your DB driver supports extracting server address correctly if you rely on `server.address` attributes in spans.
+
+
+---
+
+By mastering these core features, you gain full control over how you observe your GORM database operations. Whether detecting slow queries, understanding database load, or integrating into existing observability stacks, the GORM OpenTelemetry plugin delivers comprehensive insights with minimal effort.
+
+---

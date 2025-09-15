@@ -1,0 +1,101 @@
+{
+  "background": {
+    "decoration": "gradient"
+  },
+  "colors": {
+    "dark": "#1E3A8A",
+    "light": "#60A5FA",
+    "primary": "#60A5FA"
+  },
+  "favicon": "/favicon.svg",
+  "fonts": {
+    "family": "Montserrat",
+    "format": "woff2",
+    "source": "https://fonts.gstatic.com/s/googlesansflex/v5/t5sJIQcYNIWbFgDgAAzZ34auoVyXkJCOvp3SFWJbN5hF8Ju1x6sKCyp0l9sI40swNJwGpVd4AZzz0v6lJ4qFXNZhGjLvDSkV4USKMo6qQzwliVdHAy9jxTDHg_ugnAakpwGc-cxgUqDCIUI.woff2"
+  },
+  "icons": {
+    "library": "fontawesome"
+  },
+  "logo": {
+    "dark": "./logo/logo.svg",
+    "light": "./logo/logo.svg"
+  },
+  "name": "opentelemetry for gorm",
+  "navigation": {
+    "tabs": [
+      {
+        "groups": [
+          {
+            "group": "Product Introduction \u0026 Value",
+            "pages": [
+              "overview/product-intro/what-is-gorm-otel",
+              "overview/product-intro/core-features",
+              "overview/product-intro/target-audience-use-cases"
+            ]
+          },
+          {
+            "group": "Architecture \u0026 Core Concepts",
+            "pages": [
+              "overview/architecture-and-concepts/high-level-architecture",
+              "overview/architecture-and-concepts/key-concepts-terminology",
+              "overview/architecture-and-concepts/integration-points"
+            ]
+          }
+        ],
+        "tab": "Overview"
+      },
+      {
+        "groups": [
+          {
+            "group": "Introduction \u0026 Prerequisites",
+            "pages": [
+              "getting-started/introduction-and-prerequisites/product-overview",
+              "getting-started/introduction-and-prerequisites/prerequisites"
+            ]
+          },
+          {
+            "group": "Installation \u0026 Basic Configuration",
+            "pages": [
+              "getting-started/installation-and-configuration/installation",
+              "getting-started/installation-and-configuration/basic-configuration",
+              "getting-started/installation-and-configuration/example-usage"
+            ]
+          },
+          {
+            "group": "Validation \u0026 Troubleshooting",
+            "pages": [
+              "getting-started/validation-and-troubleshooting/validation-steps",
+              "getting-started/validation-and-troubleshooting/troubleshooting"
+            ]
+          }
+        ],
+        "tab": "Getting Started"
+      },
+      {
+        "groups": [
+          {
+            "group": "Essential Workflows",
+            "pages": [
+              "guides/essential-workflows/setup-logging",
+              "guides/essential-workflows/enable-tracing-metrics",
+              "guides/essential-workflows/configure-only-tracing",
+              "guides/essential-workflows/provider-setup"
+            ]
+          },
+          {
+            "group": "Real-world Examples \u0026 Patterns",
+            "pages": [
+              "guides/real-world-examples/prometheus-integration",
+              "guides/real-world-examples/best-practices-observability"
+            ]
+          }
+        ],
+        "tab": "Guides"
+      }
+    ]
+  },
+  "styling": {
+    "codeblocks": "dark",
+    "eyebrows": "breadcrumbs"
+  }
+}

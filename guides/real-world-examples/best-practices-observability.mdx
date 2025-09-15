@@ -1,0 +1,295 @@
+---
+title: "Best Practices for Database Observability"
+description: "A collection of proven techniques for instrumenting and observing your database layer with GORM and OpenTelemetry, including performance tips, recommended configurations, and strategies for scalable monitoring."
+---
+
+# Best Practices for Database Observability
+
+Enable robust, scalable observability in your GORM-based database layer by adopting these proven techniques with OpenTelemetry. This guide equips you with actionable strategies to optimize tracing, metrics, and logging for performance insights, debugging ease, and scalable telemetry pipelines.
+
+---
+
+## 1. Overview
+
+### What This Guide Helps You Achieve
+Unlock comprehensive visibility into your database operations using the GORM OpenTelemetry plugin. You will learn how to instrument database calls effectively, configure performant telemetry pipelines, and apply recommended settings for trace and metric collection.
+
+### Expected Outcome
+By following these best practices, you will be able to:
+- Capture meaningful trace spans that expose query durations and context
+- Collect reliable database metrics for monitoring connection pools and query loads
+- Integrate logs with trace context for easier debugging
+- Avoid common pitfalls that degrade observability quality or application performance
+
+### Who Should Use This Guide
+Backend engineers, Site Reliability Engineers (SREs), and teams responsible for application observability and monitoring.
+
+---
+
+## 2. Instrumentation Best Practices
+
+### Start with Context-Aware Tracing
+- Always carry a context.Context through your database calls to enable span correlation.
+- Use the `tracing.NewPlugin()` directly with GORM to automatically generate spans around SQL operations.
+
+```go
+// Enable tracing and metrics (default)
+db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+if err != nil {
+    panic(err)
+}
+
+// Use plugin with metrics enabled by default
+if err := db.Use(tracing.NewPlugin()); err != nil {
+    panic(err)
+}
+```
+
+<Check>
+Always pass the context from upstream requests or workflows to propagate trace information.
+</Check>
+
+### Selective Metrics Collection
+- Enable metrics only where necessary to reduce overhead.
+- Use `tracing.WithoutMetrics()` when you want tracing only without metrics collection.
+
+```go
+// Enable tracing only, disable metrics
+if err := db.Use(tracing.NewPlugin(tracing.WithoutMetrics())); err != nil {
+    panic(err)
+}
+```
+
+### Log Integration
+- Replace the default GORM logger with Logrus integrated through OpenTelemetry hooks to embed trace context.
+- This enables correlation between logs and spans, which simplifies issue tracking.
+
+```go
+import (
+    "gorm.io/gorm/logger"
+    "gorm.io/plugin/opentelemetry/logging/logrus"
+)
+
+logger := logger.New(
+    logrus.NewWriter(),
+    logger.Config{
+        SlowThreshold: time.Millisecond,
+        LogLevel:      logger.Warn,
+        Colorful:      false,
+    },
+)
+db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{Logger: logger})
+```
+
+
+## 3. Configuration Tips
+
+### Use the Default OpenTelemetry Provider
+- Utilize the built-in provider to simplify exporter setup for traces and metrics.
+- Customize endpoint, headers, and resources using configuration options or environment variables.
+
+<Tip>
+Refer to the [Set Up the Default OpenTelemetry Provider](../guides/essential-workflows/provider-setup) guide for detailed setup and customization.
+</Tip>
+
+### Configure Prometheus Metrics Exporting
+- Expose metrics via an HTTP endpoint (e.g., `/metrics`) for Prometheus to scrape.
+- Use Prometheus scrape job configuration to collect GORM database metrics.
+
+```yaml
+# prometheus.yml snippet
+scrape_configs:
+  - job_name: 'opentelemetry'
+    static_configs:
+      - targets: ['metrics:8088']
+```
+
+- Run Prometheus and your metrics service together using Docker Compose for easy orchestration:
+
+```yaml
+version: "3.7"
+services:
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - '9090:9090'
+  metrics:
+    build: ./metrics
+    ports:
+      - '8088:8088'
+```
+
+### Adjust Scrape Intervals Appropriately
+- Set `scrape_interval` and `evaluation_interval` in Prometheus to balance metric freshness and load (e.g., 15 seconds).
+
+---
+
+## 4. Performance Optimization
+
+### Minimize Span and Metric Overhead
+- Use batch span processors and periodic metric readers (default in the provider).
+- Avoid excessive logging levels that may flood logs and trace events.
+
+### Set Meaningful Log Levels
+- Configure GORM logger to appropriate levels (`Warn` or `Error`) to capture useful slow queries without noise.
+
+### Avoid High Cardinality in Metrics and Attributes
+- Limit attributes attached to spans and metrics to essential information.
+- Avoid using raw query parameters or user input fields as tags to prevent overload.
+
+## 5. Common Pitfalls and Solutions
+
+<AccordionGroup title="Common Issues">
+<Accordion title="No Trace Context Propagation">
+Ensure that all database calls use a context.Context carrying trace information.
+
+Double-check that the plugin is correctly initialized and that your traces have parent spans.
+</Accordion>
+<Accordion title="Metrics Not Visible in Prometheus">
+Verify your application exposes the `/metrics` endpoint.
+Ensure Prometheus scrape configs target the correct host and port.
+Check firewall rules if scraping remotely.
+</Accordion>
+<Accordion title="Logs Not Correlated with Traces">
+Confirm that the Logrus logger is set up using the OpenTelemetry-integrated hook.
+Pass context to the logger so the traces can link to logs.
+</Accordion>
+</AccordionGroup>
+
+---
+
+## 6. Practical Example: End-to-End Observability Setup
+
+This example combines tracing, metrics, and logging for a GORM SQLite in-memory database.
+
+```go
+package main
+
+import (
+    "context"
+    "time"
+
+    "github.com/sirupsen/logrus"
+    "gorm.io/driver/sqlite"
+    "gorm.io/gorm"
+    "gorm.io/gorm/logger"
+
+    "gorm.io/plugin/opentelemetry/logging/logrus"
+    "gorm.io/plugin/opentelemetry/tracing"
+    "go.opentelemetry.io/otel"
+    sdktrace "go.opentelemetry.io/otel/sdk/trace"
+    stdouttrace "go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+)
+
+func main() {
+    ctx := context.Background()
+
+    // Setup OTLP stdout exporter (replace with Jaeger or others for production)
+    exporter, _ := stdouttrace.New(stdouttrace.WithPrettyPrint())
+    tracerProvider := sdktrace.NewTracerProvider(sdktrace.WithBatcher(exporter))
+    otel.SetTracerProvider(tracerProvider)
+    defer tracerProvider.Shutdown(ctx)
+
+    // Setup Logrus logger with OpenTelemetry hook
+    logger := logger.New(
+        logrus.NewWriter(),
+        logger.Config{
+            SlowThreshold: time.Millisecond,
+            LogLevel:      logger.Warn,
+            Colorful:      false,
+        },
+    )
+
+    // Open GORM database with the custom logger
+    db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{Logger: logger})
+    if err != nil {
+        panic(err)
+    }
+
+    // Use tracing plugin with defaults (metrics enabled)
+    if err := db.Use(tracing.NewPlugin()); err != nil {
+        panic(err)
+    }
+
+    // Start root span
+    tracer := otel.Tracer("gorm-example")
+    ctx, span := tracer.Start(ctx, "main")
+    defer span.End()
+
+    // Execute a query with trace context
+    var count int64
+    if err := db.WithContext(ctx).Model(&someModel{}).Count(&count).Error; err != nil {
+        panic(err)
+    }
+}
+
+// someModel is your DB model
+ type someModel struct {}
+```
+
+---
+
+## 7. Visualization and Monitoring
+
+### Trace Viewing
+- Use Jaeger or another OpenTelemetry-compatible UI to inspect distributed traces.
+- Set environment variable `OTEL_EXPORTER_JAEGER_ENDPOINT` to configure Jaeger export.
+
+### Metrics Exploration
+- Query Prometheus for key metrics such as:
+  - `go_sql_connections_max_idle`
+  - `go_sql_connections_opening`
+  - `go_sql_connections_in_use`
+
+### Dashboarding
+- Combine Prometheus metrics with Grafana for customized visualization.
+- Display trends, connection pool status, and slow query counts.
+
+---
+
+## 8. Next Steps
+
+- Explore [Enable Tracing and Metrics Collection](../essential-workflows/enable-tracing-metrics) for detailed setup instructions.
+- Configure [Instrument GORM Logging with Logrus](../essential-workflows/setup-logging) for enhanced logs.
+- Integrate with [Prometheus Monitoring](../real-world-examples/prometheus-integration) for full metrics aggregation.
+- Review [Troubleshooting Common Issues](../../getting-started/validation-and-troubleshooting/troubleshooting) to resolve setup problems.
+
+---
+
+## Summary Diagram of Observability Workflow
+
+```mermaid
+flowchart TD
+    A[Application Code] -->|Calls| B[GORM DB Operations]
+    B -->|Instrumented by| C[OpenTelemetry Plugin]
+    C -->|Emits| D[Traces & Metrics]
+    D -->|Exported to| E[Telemetry Backend]
+    subgraph Backend
+        E --> F[Jaeger UI (Traces)]
+        E --> G[Prometheus (Metrics)]
+    end
+    B -->|Logs via| H[Logrus Logger]
+    H -->|Logs with Trace Context| E
+```
+
+
+<Tip>
+This diagram highlights how GORM database operations are automatically instrumented for observability with traces, metrics, and contextual logs unified into your telemetry backend.
+</Tip>
+
+---
+
+## Additional Resources
+
+- [GORM OpenTelemetry GitHub Repository](https://github.com/go-gorm/opentelemetry)
+- [OpenTelemetry Official Site](https://opentelemetry.io/)
+- Related Guides:
+  - Setup Logging with Logrus
+  - Enable Tracing and Metrics Collection
+  - Prometheus Integration
+  - Provider Setup
+
+
+<Check>
+Keep this best practices guide handy to maintain high-quality observability as your database usage and application scale.
+</Check>
