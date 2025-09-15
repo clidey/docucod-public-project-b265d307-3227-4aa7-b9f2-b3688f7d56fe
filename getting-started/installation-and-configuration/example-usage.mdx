@@ -1,0 +1,174 @@
+---
+title: "First Usage Example"
+description: "Demonstrates a minimal working example: initializing GORM with OpenTelemetry, running a basic database query, and verifying that logs, traces, and metrics are emitted as expected."
+---
+
+# First Usage Example
+
+This guide walks you through a minimal working example of integrating the GORM OpenTelemetry plugin into your Go application. You will initialize GORM with OpenTelemetry support, execute a basic database query, and verify that logs, traces, and metrics are emitted as expected to validate your observability setup.
+
+---
+
+## 1. Prerequisites
+
+Before you begin, ensure the following prerequisites are met:
+
+- **Go environment** installed and configured (Go 1.18 or later recommended).
+- **GORM** and **OpenTelemetry** dependencies added to your project.
+- A working Go project capable of running example code.
+
+> _Tip_: Use an in-memory SQLite database for simplicity during initial testing.
+
+
+## 2. Initialize GORM with OpenTelemetry and Logging
+
+Begin by setting up your GORM instance with the OpenTelemetry plugin and configuring a logger integrated with OpenTelemetry tracing.
+
+```go
+package main
+
+import (
+	"context"
+	"log"
+	"time"
+
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
+	"gorm.io/plugin/opentelemetry/logging/logrus"
+	"gorm.io/plugin/opentelemetry/tracing"
+)
+
+func main() {
+	ctx := context.Background()
+
+	// Configure a logger that integrates OpenTelemetry tracing
+	otelLogger := logger.New(
+		logrus.NewWriter(),
+		logger.Config{
+			SlowThreshold: time.Millisecond,
+			LogLevel:      logger.Warn,
+			Colorful:      false,
+		},
+	)
+
+	// Open a GORM DB connection to an in-memory SQLite database
+	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{Logger: otelLogger})
+	if err != nil {
+		log.Fatal("failed to open database", err)
+	}
+
+	// Attach the OpenTelemetry tracing plugin with metrics enabled
+	if err := db.Use(tracing.NewPlugin()); err != nil {
+		log.Fatal("failed to register tracing plugin", err)
+	}
+
+	// Run a simple query to trigger tracing, logging, and metrics
+	demoQuery(ctx, db)
+}
+
+func demoQuery(ctx context.Context, db *gorm.DB) {
+	type User struct {
+		ID   int
+		Name string
+	}
+
+	// Create a new user record
+	db.WithContext(ctx).Create(&User{Name: "Alice"})
+
+	// Query the user just created
+	var user User
+	err := db.WithContext(ctx).First(&user).Error
+	if err != nil {
+		log.Println("Query error:", err)
+		return
+	}
+
+	log.Printf("Queried User: %+v\n", user)
+}
+```
+
+
+## 3. Run Your First Operation
+
+Follow these steps to compile and run the example and observe observability outputs:
+
+<Steps>
+<Step title="Set up your Go Module">
+Initialize your project module and download dependencies.
+
+```shell
+go mod init your-module-name
+// Replace with your actual module name
+
+go get gorm.io/gorm
+go get gorm.io/driver/sqlite
+go get gorm.io/plugin/opentelemetry/logging/logrus
+go get gorm.io/plugin/opentelemetry/tracing
+```
+</Step>
+<Step title="Run the Example">
+Execute your main application:
+
+```shell
+go run main.go
+```
+</Step>
+<Step title="Observe Logs and Traces">
+- The console output should display logging information integrated with the OpenTelemetry trace context.
+- Traces are automatically created for the database operations (e.g., `Create` and `First` queries).
+</Step>
+</Steps>
+
+<Tip>
+For continuous observability, consider configuring an OpenTelemetry exporter (e.g., stdout, Jaeger) to view traces and metrics externally.
+</Tip>
+
+## 4. Verify Logs, Traces, and Metrics
+
+Through the code example:
+
+- **Logs**: Warning and error-level logs from GORM will carry OpenTelemetry trace context information.
+- **Traces**: Each database operation (`Create`, `Query`) is automatically traced and linked.
+- **Metrics**: Standard DB metrics (like connection stats) are collected via the plugin.
+
+To ensure tracing is working correctly, you can incorporate an OpenTelemetry exporter such as the stdout exporter demonstrated in [examples/demo](../examples/demo/README.md).
+
+## 5. Next Steps
+
+After a successful run:
+
+- Explore advanced configuration for tracing, logging, and metrics collection in the [Basic Configuration](../installation-and-configuration/basic-configuration) guide.
+- Integrate with popular tracing backends like Jaeger or metrics platforms like Prometheus as shown in the [Prometheus Integration](../../guides/real-world-examples/prometheus-integration) guide.
+- Check out the troubleshooting tips in [Troubleshooting Common Issues](../validation-and-troubleshooting/troubleshooting) for resolving issues encountered during integration.
+
+---
+
+## Troubleshooting Common Issues
+
+<AccordionGroup title="Troubleshooting First Usage">
+<Accordion title="GORM Fails to Connect to Database">
+- Verify your DSN and driver installation. Using the in-memory SQLite (`file::memory:?cache=shared`) avoids external dependencies.
+- Check for errors immediately after `gorm.Open`.
+</Accordion>
+<Accordion title="No Traces or Logs Are Visible">
+- Confirm the OpenTelemetry provider and exporter are initialized properly.
+- Check that your log level is set appropriately (`Warn` or higher by default).
+- Use a simple stdout exporter for initial verification.
+</Accordion>
+<Accordion title="Metrics Are Not Showing Up">
+- Ensure the tracing plugin is registered without `WithoutMetrics()` option.
+- Confirm your metrics backend (Prometheus) is running and scraping the data source.
+</Accordion>
+</AccordionGroup>
+
+---
+
+## Related Resources
+
+- [Basic Configuration Guide](../installation-and-configuration/basic-configuration) — Learn detailed settings for telemetry features.
+- [Prometheus Integration Guide](../../guides/real-world-examples/prometheus-integration) — Set up metrics scraping and visualization.
+- [Demo Examples](../../examples/demo/README.md) — Hands-on projects showing tracing exporters.
+- [Troubleshooting Guide](../validation-and-troubleshooting/troubleshooting) — Resolve common setup challenges.
+
+---
