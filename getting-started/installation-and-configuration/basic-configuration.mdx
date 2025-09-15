@@ -1,0 +1,280 @@
+---
+title: "Configuring OpenTelemetry Features"
+description: "Walks through configuring tracing, metrics, and logging with sample code, highlighting how to enable all or selected features in your GORM setup. Guides on setting environment variables or configuration options for each provider."
+---
+
+# Configuring OpenTelemetry Features
+
+This guide walks you through setting up tracing, metrics collection, and logging in your GORM-enabled Go application using the GORM OpenTelemetry plugin. You’ll learn how to enable all observability features or select only specific ones, and how to configure providers through environment variables or programmatic options.
+
+---
+
+## 1. Overview: What You’ll Achieve
+
+By configuring OpenTelemetry features with GORM, you will successfully instrument your database operations to:
+
+- Trace SQL queries and associated calls.
+- Collect key database metrics.
+- Enable structured, context-aware logging.
+
+This integration allows you to observe GORM’s internal activities seamlessly, providing real-time insights to optimize and troubleshoot your app.
+
+---
+
+## 2. Enabling OpenTelemetry Features
+
+You can enable tracing, metrics, and logging independently or in combination by configuring the plugin options and environment variables.
+
+### 2.1 Enable Tracing with Default Settings
+
+Tracing is the core feature that tracks database operations as spans.
+
+```go
+import (
+  "context"
+  "gorm.io/driver/sqlite"
+  "gorm.io/gorm"
+  "gorm.io/plugin/opentelemetry/tracing"
+)
+
+func setupDBWithTracing() (*gorm.DB, error) {
+  db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+  if err != nil {
+    return nil, err
+  }
+
+  // Add tracing plugin with default options
+  if err := db.Use(tracing.NewPlugin()); err != nil {
+    return nil, err
+  }
+
+  return db, nil
+}
+```
+
+This will automatically create and report spans for GORM’s database calls covering `Create`, `Query`, `Update`, `Delete`, `Row`, and `Raw`.
+
+
+---
+
+### 2.2 Disable Metrics if You Want Tracing Only
+
+If metrics collection is not required, disable it explicitly:
+
+```go
+func setupDBWithTracingOnly() (*gorm.DB, error) {
+  db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+  if err != nil {
+    return nil, err
+  }
+
+  // Tracing plugin without metrics
+  if err := db.Use(tracing.NewPlugin(tracing.WithoutMetrics())); err != nil {
+    return nil, err
+  }
+
+  return db, nil
+}
+```
+
+This option ensures only tracing spans are generated, reducing overhead if metrics are not necessary.
+
+---
+
+### 2.3 Configuring Logging with Logrus
+
+Integrate structured logging with your GORM operations, enhancing logs with trace context:
+
+```go
+import (
+  "time"
+
+  "gorm.io/gorm/logger"
+  "gorm.io/plugin/opentelemetry/logging/logrus"
+  "gorm.io/driver/sqlite"
+  "gorm.io/gorm"
+)
+
+func setupDBWithLogging() (*gorm.DB, error) {
+  log := logger.New(
+    logrus.NewWriter(),
+    logger.Config{
+      SlowThreshold: time.Millisecond, // log slow queries above this threshold
+      LogLevel: logger.Warn,           // set min log level
+      Colorful: false,
+    },
+  )
+
+  db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{Logger: log})
+  if err != nil {
+    return nil, err
+  }
+
+  return db, nil
+}
+```
+
+Logs generated will include trace IDs and span context, allowing you to correlate logs directly with tracing data.
+
+---
+
+## 3. Setting Environment Variables for Providers
+
+OpenTelemetry exporters and providers can be configured through environment variables to target popular observability backends.
+
+### 3.1 Example: Jaeger Exporter Configuration
+
+Run Jaeger using Docker Compose:
+
+```shell
+cd examples/demo
+
+docker-compose up -d
+```
+
+Set the Jaeger endpoint to export traces:
+
+```shell
+export OTEL_EXPORTER_JAEGER_ENDPOINT=http://localhost:14268/api/traces
+```
+
+Run your Go application after setting this environment variable to export spans to Jaeger.
+
+### 3.2 Default Stdout Exporter
+
+If no exporter environment variable is set, the plugin defaults to a pretty-printed stdout trace exporter, ideal for local debugging.
+
+---
+
+## 4. Sample Configuration and Usage Walkthrough
+
+The following example demonstrates setting up tracing, metrics, and logging together for a complete observability setup:
+
+```go
+package main
+
+import (
+  "context"
+  "fmt"
+  "os"
+  "time"
+
+  "go.opentelemetry.io/otel"
+  "go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+  sdktrace "go.opentelemetry.io/otel/sdk/trace"
+  "gorm.io/driver/sqlite"
+  "gorm.io/gorm"
+  "gorm.io/gorm/logger"
+
+  "gorm.io/plugin/opentelemetry/logging/logrus"
+  "gorm.io/plugin/opentelemetry/tracing"
+)
+
+func configureTracing(ctx context.Context) func() {
+  provider := sdktrace.NewTracerProvider()
+  otel.SetTracerProvider(provider)
+  
+  exp, err := stdouttrace.New(stdouttrace.WithPrettyPrint())
+  if err != nil {
+    panic(err)
+  }
+  bsp := sdktrace.NewBatchSpanProcessor(exp)
+  provider.RegisterSpanProcessor(bsp)
+
+  return func() {
+    if err := provider.Shutdown(ctx); err != nil {
+      panic(err)
+    }
+  }
+}
+
+func main() {
+  ctx := context.Background()
+
+  shutdown := configureTracing(ctx)
+  defer shutdown()
+
+  log := logger.New(
+    logrus.NewWriter(),
+    logger.Config{
+      SlowThreshold: time.Millisecond,
+      LogLevel: logger.Warn,
+      Colorful: false,
+    },
+  )
+
+  db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{Logger: log})
+  if err != nil {
+    panic(err)
+  }
+
+  if err := db.Use(tracing.NewPlugin()); err != nil {
+    panic(err)
+  }
+
+  tracer := otel.Tracer("gorm.io/plugin/opentelemetry")
+
+  ctx, span := tracer.Start(ctx, "root")
+  defer span.End()
+
+  var num int
+  if err := db.WithContext(ctx).Raw("SELECT 42").Scan(&num).Error; err != nil {
+    panic(err)
+  }
+
+  fmt.Println("Query result:", num)
+}
+```
+
+This example:
+
+- Initializes the OpenTelemetry tracer with a stdout exporter.
+- Configures GORM with the Logrus-enhanced logger.
+- Uses the OpenTelemetry tracing plugin to instrument database calls.
+- Runs a sample query within a trace span.
+
+---
+
+## 5. Additional Tips and Best Practices
+
+- Use environment variables such as `OTEL_EXPORTER_JAEGER_ENDPOINT` to point exporters to the correct backend.
+- If you only require tracing without metrics, always use `tracing.WithoutMetrics()` for minimal overhead.
+- Configure slow query logging threshold in the logger to catch performance bottlenecks.
+- For production, connect to dedicated OpenTelemetry collectors or observability systems.
+- Ensure context propagation is properly handled in your application code to maintain trace continuity.
+
+---
+
+## 6. Troubleshooting Common Issues
+
+### Traces Not Appearing in Jaeger or Other Backend
+- Confirm your exporter environment variables are correctly set.
+- Make sure the backend services (Jaeger, Prometheus) are running and reachable.
+- Check network/firewall rules that might block communication.
+
+### Logging Missing Trace IDs
+- Verify your logger is set to use the OpenTelemetry Logrus writer.
+- Ensure that you invoke database operations using `db.WithContext(ctx)` to pass the tracing context.
+
+### Metrics Not Collected
+- Metrics collection requires explicit setup; if metrics are disabled with `WithoutMetrics()`, no measurements will be reported.
+- For Prometheus integration, ensure the Prometheus server is scraping the exposed `/metrics` endpoint.
+
+---
+
+## 7. Related Documentation and Next Steps
+
+- [Installation Guide](/getting-started/installation-and-configuration/installation): Learn to install GORM OpenTelemetry plugin.
+- [First Usage Example](/getting-started/installation-and-configuration/example-usage): See a full walkthrough from setup to running.
+- [Validating Your Setup](/getting-started/validation-and-troubleshooting/validation-steps): Verify tracing, metrics, and logging are working as expected.
+- [Troubleshooting Common Issues](/getting-started/validation-and-troubleshooting/troubleshooting): In-depth solutions for common problems.
+
+Explore these to deepen your mastery and ensure a robust observability implementation.
+
+---
+
+For full example projects demonstrating these configurations, see the [`examples/demo`](https://github.com/go-gorm/opentelemetry/tree/main/examples/demo) and [`examples/metric`](https://github.com/go-gorm/opentelemetry/tree/main/examples/metric) directories in the repository.
+
+<Check>
+Remember: Always wrap your database calls with the appropriate context containing tracing spans to propagate trace data correctly.
+</Check>
