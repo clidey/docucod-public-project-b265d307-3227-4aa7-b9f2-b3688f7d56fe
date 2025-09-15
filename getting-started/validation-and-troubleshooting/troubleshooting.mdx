@@ -1,0 +1,171 @@
+---
+title: "Troubleshooting Common Issues"
+description: "Covers frequently encountered setup errors—such as misconfiguration, missing dependencies, or no data received by observability backends—and solutions to resolve them quickly."
+---
+
+# Troubleshooting Common Issues
+
+This guide addresses frequent problems you may encounter during setup and use of the GORM OpenTelemetry plugin, especially related to tracing, logging, and metrics collection. If you face issues like missing data in your observability backends, configuration errors, or unexpected absence of logs and spans, follow these actionable solutions to quickly resolve them.
+
+---
+
+## 1. No Traces or Spans Are Collected
+
+If you observe no tracing data in your backend (e.g., Jaeger, stdout exporter), verify these steps:
+
+### Step 1: Confirm Tracer Provider Setup
+- Ensure the OpenTelemetry tracer provider is correctly initialized in your application. Without a provider, no spans will be created or propagated.
+- Example from test setup:
+
+```go
+provider := sdktrace.NewTracerProvider()
+otel.SetTracerProvider(provider)
+```
+
+### Step 2: Verify Context Propagation
+- Make sure you pass the context containing the active span when invoking GORM operations or logging. Missing context means spans won't be linked or recorded.
+
+### Step 3: Check Plugin Installation
+- Confirm the Tracing plugin is properly registered on your GORM DB instance:
+
+```go
+if err := db.Use(tracing.NewPlugin()); err != nil {
+    panic(err)
+}
+```
+
+- For tracing without metrics, use:
+
+```go
+if err := db.Use(tracing.NewPlugin(tracing.WithoutMetrics())); err != nil {
+    panic(err)
+}
+```
+
+### Step 4: Validate Exporter Configuration
+- If using Jaeger or other exporters, ensure environment variables like `OTEL_EXPORTER_JAEGER_ENDPOINT` are set correctly.
+- Verify your observability backend is running and accessible.
+
+---
+
+## 2. Logs Missing Trace Context (trace_id, span_id)
+
+Structured logs should contain OpenTelemetry trace context to enable log-span correlation. If your logs miss these fields:
+
+### Step 1: Use Provided Logger Wrapper
+- Instantiate your logger using the plugin's provided writer (e.g., Logrus or slog writer):
+
+```go
+logger := logger.New(
+   logrus.NewWriter(),
+   logger.Config{
+     SlowThreshold: time.Millisecond,
+     LogLevel: logger.Warn,
+     Colorful: false,
+   },
+)
+```
+
+- Avoid using the default GORM logger if trace context is needed.
+
+### Step 2: Pass Context to Logger Calls
+- Always pass the context holding span information when logging.
+
+```go
+db.Logger.Info(ctx, "hello %s", "world")
+```
+
+### Step 3: Verify Hook/Handler Setup
+- Ensure trace hooks are enabled to enrich logs. For Logrus:
+
+```go
+hook := logrus.NewTraceHook(&logrus.TraceHookConfig{
+  recordStackTraceInSpan: true,
+  errorSpanLevel: logrus.WarnLevel,
+  enableLevels: logrus.AllLevels,
+})
+logrusLogger.Hooks.Add(hook)
+```
+
+- For slog, use the trace handler with appropriate options.
+
+---
+
+## 3. Metrics Data Not Appearing in Prometheus
+
+Metrics depend on a running Prometheus scraping the exposed metrics endpoint.
+
+### Step 1: Run the Metrics Example Composition
+- From the `examples/metric` directory, run:
+
+```shell
+cd examples/metric
+docker-compose up -d
+```
+
+### Step 2: Verify Metrics Endpoint
+- Confirm your app exposes metrics at `http://localhost:8088/metrics`.
+- Check Prometheus is scraping this endpoint at `http://localhost:9090`.
+
+### Step 3: Query Metric Names
+- Use Prometheus UI to query metrics such as `go_sql_connections_max_idle`.
+
+---
+
+## 4. Log Level Configuration Issues
+
+You might find logs missing or too verbose depending on log level settings.
+
+### Step 1: Set Log Level Explicitly
+
+```go
+logger.SetLevel(slog.LevelDebug)
+```
+
+### Step 2: Confirm Output Target
+- Make sure your logger writes to the desired output (console, file, buffer).
+
+```go
+logger.SetOutput(os.Stdout)
+```
+
+### Step 3: Adjust Handler Options
+- For finer control, customize handlers to add source information or override message formatting.
+
+---
+
+## 5. Errors During Initialization
+
+### Common Cause: Missing Dependencies
+- The plugin relies on packages like `go.opentelemetry.io/otel`, GORM, slog or logrus, and database drivers like sqlite.
+
+### Resolution Steps
+- Check your `go.mod` includes the required dependencies.
+- Run `go get -u` to update packages.
+- Verify your import paths match those in plugin examples.
+
+---
+
+## 6. Troubleshooting Tips and Best Practices
+
+- **Always use context properly:** Passing context is essential to trace propagation and log enrichment.
+- **Begin with stdout exporter for tracing:** Start with a simple, local stdout exporter to validate tracing before moving to Jaeger or others.
+- **Enable verbose logging during setup:** Temporarily raise logging levels to debug to see what the plugin does internally.
+- **Use provided examples:** Reference the example directories (`examples/demo`, `examples/metric`) for working setups.
+- **Monitor your observability backend:** Check Jaeger or Prometheus logs to ensure they receive data.
+
+---
+
+## 7. Additional Resources
+
+- [Installing and Configuring OpenTelemetry](../../getting-started/installation-and-configuration/installation)
+- [Basic Configuration and Usage Examples](../../getting-started/installation-and-configuration/basic-configuration)
+- [Validating Your Setup](../../getting-started/validation-and-troubleshooting/validation-steps)
+- [Setup Logging with Logrus](../../guides/essential-workflows/setup-logging)
+- [Integrate with Prometheus Monitoring](../../guides/real-world-examples/prometheus-integration)
+
+---
+
+If issues persist after these steps, consult the community or file an issue at the project repository: https://github.com/go-gorm/opentelemetry
+
+---
