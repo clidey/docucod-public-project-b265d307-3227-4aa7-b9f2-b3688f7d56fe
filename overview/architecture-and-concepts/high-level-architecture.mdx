@@ -1,0 +1,136 @@
+---
+title: "High-Level Architecture"
+description: "Visualize the system's structure: how GORM operations are intercepted by the plugin, how traces, metrics, and logs flow to OpenTelemetry, and how providers and environment variables enable customization. Includes a mermaid diagram for clarity."
+---
+
+# High-Level Architecture
+
+Understand how the GORM OpenTelemetry plugin integrates with GORM to provide seamless tracing, metrics, and logging for database operations. This page presents the system's architecture from a user-focused perspective, highlighting the flow of data and the role of customizable providers and environment variables.
+
+---
+
+## Why This Matters
+
+When using the GORM OpenTelemetry plugin, you want confidence that your database interactions are fully observable without intrusive code changes. This architecture unlocks rich insights by intercepting GORM operations, forwarding observability data to OpenTelemetry-compatible backends so you can troubleshoot and optimize effectively.
+
+---
+
+## Overview of the Architecture
+
+At its core, the plugin sits between your application and the GORM ORM framework. It intercepts database operations such as `Create`, `Query`, `Update`, `Delete`, `Row`, and `Raw` via GORM hooks. Once intercepted, observability data—spans for tracing, metrics about DB status, and logs—are generated and passed downstream to OpenTelemetry.
+
+Customization is supported through environment variables and provider configurations, allowing you to adapt exporters, instrumentation, and metrics collection to your monitoring environment.
+
+---
+
+## Key Components and Data Flow
+
+```mermaid
+flowchart TD
+
+  subgraph Application
+    App["User Application with GORM"]
+  end
+
+  subgraph GORM
+    GORM["GORM ORM Framework"]
+    Hooks["GORM Hooks (Create, Query, Update, Delete, Row, Raw)"]
+  end
+
+  subgraph Plugin
+    Plugin["GORM OpenTelemetry Plugin"]
+  end
+
+  subgraph OpenTelemetry
+    Traces["Tracing (Spans)"]
+    Metrics["Metrics (DB Status & Performance)"]
+    Logs["Structured Logging"]
+    Provider["OpenTelemetry Provider & Exporters"]
+  end
+
+  App -->|Use GORM ORM| GORM
+  GORM -->|Operations Intercepted by| Hooks
+  Hooks -->|Intercepted by| Plugin
+
+  Plugin -->|Send Traces| Traces
+  Plugin -->|Collect & Send Metrics| Metrics
+  Plugin -->|Replace Logger for Logs| Logs
+
+  Traces -->|Exported via| Provider
+  Metrics -->|Exported via| Provider
+  Logs -->|Forwarded via| Provider
+
+  subgraph Configuration
+    EnvVars["Environment Variables & Plugin Options"]
+  end
+
+  EnvVars --> Plugin
+  EnvVars --> Provider
+
+  classDef component fill:#f9f,stroke:#333,stroke-width:1px;
+  class App,GORM,Hooks,Plugin,Traces,Metrics,Logs,Provider,EnvVars component;
+```
+
+---
+
+## Components Explained
+
+- **User Application with GORM**: Your application initiates database calls normally through the GORM ORM.
+
+- **GORM ORM Framework**: Handles SQL operations and triggers hooks at various lifecycle points of database queries.
+
+- **GORM Hooks**: The intercept points inside GORM for operations like `Create`, `Query`, and more.
+
+- **GORM OpenTelemetry Plugin**: The core agent that captures database operation context and creates related tracing spans, metrics, and context-aware logs.
+
+- **OpenTelemetry Provider & Exporters**: The conduit that sends observability data downstream to systems like Jaeger (for tracing), Prometheus (for metrics), or other configured backends.
+
+- **Environment Variables & Plugin Options**: Customize behaviour and exporters by setting environment variables or plugin parameters, tailoring the observability pipeline to your environment.
+
+---
+
+## How This Benefits You
+
+- **Unified Observability**: Centralized tracing, metrics, and logging for all database activity without manual instrumentation.
+- **Minimal Code Changes**: Enables observability simply by attaching the plugin to your GORM DB instance.
+- **Flexible Provider Setup**: Configure exporters and metrics backends easily via environment variables.
+- **Real-time Monitoring & Debugging**: See detailed traces and metrics to identify slow queries, errors, and resource usage instantly.
+
+---
+
+## Practical Example in Workflow
+
+1. You open a connection and perform a query using GORM inside your app.
+2. GORM triggers `Query` and other related hooks.
+3. The plugin intercepts these hooks, creating spans to trace the operation.
+4. Metrics such as connection status and query performance counters are captured concurrently.
+5. Logs are generated or intercepted by the plugin’s logger to enrich trace context.
+6. All telemetry data is sent to the configured OpenTelemetry provider, which exports to your observability backend (e.g., Jaeger, Prometheus).
+
+---
+
+## Configuration Points
+
+Leverage environment variables like `OTEL_EXPORTER_JAEGER_ENDPOINT` to define the endpoint for trace export, or plugin options such as `tracing.WithoutMetrics()` to selectively enable features.
+
+This flexible setup allows you to adapt the plugin to your monitoring stack effortlessly.
+
+---
+
+## Get Started
+
+To see this architecture in action, explore the [example/demo/main.go](https://github.com/go-gorm/opentelemetry/blob/main/examples/demo/main.go) that demonstrates the plugin intercepting GORM calls and exporting traces.
+
+Also, check the metrics example to learn about metrics scraping and visualization.
+
+---
+
+## Troubleshooting Tips
+
+- Ensure environment variables for exporters are properly set.
+- Confirm plugin use by checking if tracing spans appear in your backend.
+- Use logs from the plugin’s logger to diagnose hook interception issues.
+
+---
+
+Explore related sections in this documentation for deeper insights into configuration, integration points, and best practices.
