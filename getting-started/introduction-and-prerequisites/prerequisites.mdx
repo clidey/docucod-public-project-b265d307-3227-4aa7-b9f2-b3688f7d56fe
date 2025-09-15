@@ -1,0 +1,144 @@
+---
+title: "System Requirements & Prerequisites"
+description: "Review supported Go and GORM versions, required third-party packages, and tooling. Ensure your system is ready for OpenTelemetry integration before proceeding."
+---
+
+# System Requirements & Prerequisites
+
+Ensure your system is prepared for integrating OpenTelemetry with GORM by reviewing supported versions, necessary packages, and tooling. This preparation guarantees a smooth installation and reliable observability features.
+
+---
+
+## 1. Supported Go and GORM Versions
+
+OpenTelemetry for GORM is designed to work with specific versions of Go and GORM to ensure compatibility and stability.
+
+- **Go Version:**
+  - Minimum Go version 1.18 is required.
+  - Compatible up to the latest stable Go releases.
+
+- **GORM Version:**
+  - Supports GORM v1.23.x and above.
+  - Ensure the version of GORM in your project matches or exceeds this to avoid integration issues.
+
+<Check>
+Verify your Go version with:
+```bash
+go version
+```
+Check your GORM version in your `go.mod` file or by running:
+```bash
+go list -m all | grep gorm.io/gorm
+```
+</Check>
+
+## 2. Required Third-Party Packages
+
+These dependencies must be included in your project to enable OpenTelemetry features seamlessly.
+
+- **OpenTelemetry Go SDK:** For trace and metrics support.
+- **OTLP Exporters (optional):** Allow exporting telemetry data to external backends like Jaeger or Prometheus.
+- **GORM OpenTelemetry Plugin:** The plugin itself integrates tracing, metrics, and logging.
+
+Make sure your module dependencies include these, typically handled via `go get` commands, such as:
+
+```bash
+go get go.opentelemetry.io/otel
+```
+
+Refer to the Installation guide for exact dependency installation commands.
+
+## 3. Tooling Requirements
+
+Prepare your development and runtime environment with the following tools:
+
+- **Go Toolchain:** Go 1.18 or newer installed and configured.
+- **Docker (optional):** Useful for running observability backends like Jaeger or Prometheus during development and testing.
+- **Prometheus and Jaeger:** Commonly used for visualizing metrics and traces.
+
+### Docker Services Examples
+
+- You can quickly start Prometheus and Jaeger using provided docker-compose files in the samples.
+
+```bash
+docker-compose -f examples/demo/docker-compose.yaml up -d
+```
+
+This command sets up Jaeger and Grafana for trace visualization.
+
+## 4. Network and Access Requirements
+
+- **Network Access:** Ensure your application environment can communicate with telemetry backends (e.g., Jaeger endpoint or Prometheus scraper).
+- **Firewall and Ports:** Open necessary ports (e.g., 14268 for Jaeger HTTP collector, 9090 for Prometheus) to allow telemetry data flow.
+
+## 5. Environment Preparation Checklist
+
+<Steps>
+<Step title="Verify Go version">
+Run `go version` to confirm you have Go 1.18 or newer.
+</Step>
+<Step title="Check GORM version">
+Review your `go.mod` to ensure GORM >= v1.23 is used.
+</Step>
+<Step title="Install required dependencies">
+Use `go get` commands or update `go.mod` as per installation instructions.
+</Step>
+<Step title="Set up telemetry backends">
+Optionally start Jaeger and Prometheus via Docker to capture traces and metrics.
+</Step>
+<Step title="Open network ports">
+Ensure ports for telemetry exporters are open for your development or production environment.
+</Step>
+</Steps>
+
+## 6. Common Pitfalls and Tips
+
+- **Mismatched Versions:** Using unsupported Go or GORM versions will cause compilation or integration failures.
+- **Missing Dependencies:** Forgetting to install the OpenTelemetry SDK or exporters will prevent telemetry data from being captured or exported.
+- **Closed Ports or Blocked Network:** Telemetry data may silently fail if network communication with the backend is blocked.
+
+<Tip>
+Always verify your environment matches the required versions before proceeding with installation to avoid errors that are difficult to troubleshoot later.
+</Tip>
+
+<Warning>
+Do not skip setting up telemetry backends like Jaeger or Prometheus if you want to visualize and analyze your traces and metrics.
+</Warning>
+
+## 7. Next Steps
+
+After confirming your system meets these prerequisites, proceed to the [Installation Guide](/getting-started/installation-and-configuration/installation) to set up the plugin and integrate OpenTelemetry into your GORM-powered Go application.
+
+---
+
+For a high-level understanding of how the plugin integrates and delivers observability, see the [High-Level Architecture](/overview/architecture-and-concepts/high-level-architecture). To explore practical use cases and user profiles, refer to [Target Audience & Use Cases](/overview/product-intro/target-audience-use-cases).
+
+---
+
+## References
+
+- [Official Go Downloads](https://golang.org/dl/)
+- [GORM Repository](https://github.com/go-gorm/gorm)
+- [OpenTelemetry Go SDK](https://opentelemetry.io/docs/go/)
+- [Jaeger All-in-One Docker](https://www.jaegertracing.io/docs/1.29/getting-started/#all-in-one)
+- [Prometheus Official Docker](https://prometheus.io/docs/prometheus/latest/installation/)
+
+---
+
+# Summary
+
+This guide ensures you have the supported Go and GORM versions, required third-party Go modules, and necessary tooling installed before beginning OpenTelemetry integration. It covers version checks, dependency requirements, tooling setup including optional Docker backends, and network considerations essential for effective telemetry data flow.
+
+# Next up
+
+- Installation steps: [Installation Guide](/getting-started/installation-and-configuration/installation)
+- Configure OpenTelemetry features: [Basic Configuration](/getting-started/installation-and-configuration/basic-configuration)
+- Example usage and first operation: [First Usage Example](/getting-started/installation-and-configuration/example-usage)
+
+# Related pages
+
+- [What is OpenTelemetry for GORM?](/getting-started/introduction-and-prerequisites/product-overview)
+- [High-Level Architecture](/overview/architecture-and-concepts/high-level-architecture)
+- [Target Audience & Use Cases](/overview/product-intro/target-audience-use-cases)
+
+---
