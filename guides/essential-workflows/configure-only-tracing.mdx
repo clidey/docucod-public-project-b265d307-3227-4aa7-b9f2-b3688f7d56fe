@@ -1,0 +1,268 @@
+---
+title: "Configure Tracing Without Metrics"
+description: "Focus on request tracing without enabling metrics. This guide walks you through using plugin options to tailor observability to your project's privacy, cost, or performance needs."
+---
+
+# Configure Tracing Without Metrics
+
+This guide focuses on enabling **request tracing** in GORM-enabled Go applications using OpenTelemetry, without collecting metrics. You will learn how to configure the tracing plugin to align with your project's priorities—whether for privacy, cost savings, or reducing runtime overhead—by disabling metrics collection while retaining full tracing capabilities.
+
+---
+
+## Workflow Overview
+
+- **Goal:** Enable detailed database query tracing with OpenTelemetry in GORM, excluding metrics collection.
+- **Why:** Some projects require observability focused solely on tracing, avoiding metrics to reduce noise, minimize data volume, or protect sensitive usage data.
+- **Prerequisites:**
+  - A Go project using GORM
+  - Basic familiarity with OpenTelemetry concepts (tracing and metrics)
+  - Access to configure your application's instrumentation plugins
+- **Outcome:** You will have tracing enabled with spans for database operations, without any metrics reported.
+- **Estimated Time:** 10-15 minutes to integrate and verify
+- **Difficulty:** Beginner to Intermediate
+
+---
+
+## Step-by-Step Instructions
+
+### 1. Install and Import Required Plugins
+
+Make sure your Go module includes the OpenTelemetry tracing plugin for GORM:
+
+```go
+import (
+	"gorm.io/plugin/opentelemetry/tracing"
+)
+```
+
+You will disable metrics using plugin options in the next step.
+
+### 2. Configure the Tracing Plugin Without Metrics
+
+By default, the tracing plugin enables both tracing and metrics collection. To disable metrics:
+
+```go
+import (
+	"gorm.io/plugin/opentelemetry/tracing"
+)
+
+func main() {
+	// Open your GORM database as usual
+	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+	if err != nil {
+		panic(err)
+	}
+
+	// Use the tracing plugin with metrics disabled
+	if err := db.Use(tracing.NewPlugin(tracing.WithoutMetrics())); err != nil {
+		panic(err)
+	}
+
+	// Proceed with your application logic that benefits from tracing
+	// For example, run a traced query...
+}
+```
+
+The key is `tracing.WithoutMetrics()`, which instructs the plugin to only enable tracing spans.
+
+### 3. Set Up OpenTelemetry Tracer Provider
+
+Ensure you have a tracing provider configured. A simple example using stdout exporter:
+
+```go
+import (
+	"context"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+)
+
+func ConfigureTracing(ctx context.Context) func() {
+	provider := sdktrace.NewTracerProvider()
+	otel.SetTracerProvider(provider)
+
+	exp, err := stdouttrace.New(stdouttrace.WithPrettyPrint())
+	if err != nil {
+		panic(err)
+	}
+
+	bsp := sdktrace.NewBatchSpanProcessor(exp)
+	provider.RegisterSpanProcessor(bsp)
+
+	return func() {
+		if err := provider.Shutdown(ctx); err != nil {
+			panic(err)
+		}
+	}
+}
+```
+
+Call this setup at your application's entry point before using GORM with tracing:
+
+```go
+ctx := context.Background()
+shutdown := ConfigureTracing(ctx)
+defer shutdown()
+```
+
+### 4. Inject Trace Context in Database Calls
+
+When executing GORM queries, use `WithContext(ctx)` to ensure traces are linked correctly:
+
+```go
+var result int
+if err := db.WithContext(ctx).Raw("SELECT 42").Scan(&result).Error; err != nil {
+    panic(err)
+}
+```
+
+This guarantees database spans are children of the current trace.
+
+### 5. Optional: View Your Traces in Jaeger
+
+If you want to view traces in Jaeger instead of stdout:
+
+- Run Jaeger using docker-compose:
+
+```shell
+cd examples/demo
+
+docker-compose up -d
+```
+
+- Set the environment variable before running your app:
+
+```shell
+export OTEL_EXPORTER_JAEGER_ENDPOINT=http://localhost:14268/api/traces
+```
+
+- Run your traced app. Open `http://localhost:16686` in a browser to explore traces.
+
+---
+
+## Practical Example
+
+Here is a minimal, complete example that enables tracing without metrics:
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+	"gorm.io/plugin/opentelemetry/tracing"
+)
+
+func ConfigureTracing(ctx context.Context) func() {
+	provider := sdktrace.NewTracerProvider()
+	otel.SetTracerProvider(provider)
+
+	exp, err := stdouttrace.New(stdouttrace.WithPrettyPrint())
+	if err != nil {
+		panic(err)
+	}
+
+	bsp := sdktrace.NewBatchSpanProcessor(exp)
+	provider.RegisterSpanProcessor(bsp)
+
+	return func() {
+		if err := provider.Shutdown(ctx); err != nil {
+			panic(err)
+		}
+	}
+}
+
+func main() {
+	ctx := context.Background()
+	shutdown := ConfigureTracing(ctx)
+	defer shutdown()
+
+	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
+	if err != nil {
+		panic(err)
+	}
+
+	// Apply tracing plugin without metrics
+	if err := db.Use(tracing.NewPlugin(tracing.WithoutMetrics())); err != nil {
+		panic(err)
+	}
+
+	tracer := otel.Tracer("gorm.io/plugin/opentelemetry")
+	ctx, span := tracer.Start(ctx, "root")
+	defer span.End()
+
+	var num int
+	if err := db.WithContext(ctx).Raw("SELECT 42").Scan(&num).Error; err != nil {
+		panic(err)
+	}
+
+	fmt.Println("Query result:", num)
+
+	// Optional: print a trace URL for Jaeger if enabled
+	if os.Getenv("OTEL_EXPORTER_JAEGER_ENDPOINT") != "" {
+		fmt.Printf("Trace ID: %s\n", span.SpanContext().TraceID())
+	}
+}
+```
+
+This example demonstrates how to initialize tracing with stdout exporter, disable metrics, and execute a traced query.
+
+---
+
+## Troubleshooting & Tips
+
+<AccordionGroup title="Common Issues and Solutions">
+<Accordion title="Traces Not Appearing in Jaeger">
+- Ensure you have set the environment variable `OTEL_EXPORTER_JAEGER_ENDPOINT` correctly.
+- Verify Jaeger is running and accessible at the configured endpoints.
+- Confirm network connectivity between your app and Jaeger collector.
+</Accordion>
+<Accordion title="Metrics Still Being Collected">
+- Double-check you passed `tracing.WithoutMetrics()` when creating the tracing plugin.
+- Avoid using any metrics-related providers or instrumentation.
+</Accordion>
+<Accordion title="Traces Missing Context or Parent Spans">
+- Make sure to propagate context with `db.WithContext(ctx)` for all your queries.
+- Verify your tracer provider is correctly set before issuing any GORM requests.
+</Accordion>
+</AccordionGroup>
+
+<Tip>
+To optimize performance while still capturing necessary trace data, disable metrics selectively using `tracing.WithoutMetrics()` especially in sensitive, high-throughput, or cost-concerned environments.
+</Tip>
+
+<Warning>
+Do not rely solely on stdout exporters for production tracing; use appropriate collectors/exporters like Jaeger or OTLP for scalable observability.
+</Warning>
+
+---
+
+## Next Steps & Related Content
+
+- **Set Up the Default OpenTelemetry Provider** — Learn how to configure default providers with advanced options for tracing and metrics.
+- **Enable Tracing and Metrics Collection** — Explore enabling full observability including both traces and metrics.
+- **Instrument GORM Logging with Logrus** — Integrate structured logs correlated with trace context.
+- **Prometheus Integration** — Extend metrics collection with Prometheus monitoring.
+
+For full examples, see the `examples/demo` directory in the repository.
+
+---
+
+## Reference Links
+
+- [GORM OpenTelemetry Plugin README](https://github.com/go-gorm/opentelemetry/blob/main/README.md)
+- [example: Configure tracing without metrics (`examples/demo/main.go`)](https://github.com/go-gorm/opentelemetry/blob/main/examples/demo/main.go)
+- [example: Enable tracing with Jaeger docker-compose](https://github.com/go-gorm/opentelemetry/blob/main/examples/demo/docker-compose.yaml)
+
+---
+
+This guide empowers you to enable request tracing with precision, stripping away metrics to suit privacy or performance needs while gaining full insight into your database operations.
+
+
